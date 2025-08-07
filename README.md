@@ -1,4 +1,4 @@
-# SETRUM
+# SETRUM (Smart Electricity Tracking, Reporting, and Utilization Monitor)
 
   Smart Home adalah sebuah konsep rumah yang berbasis teknologi modern, terutama Internet of Things (IoT), untuk mengontrol, memonitor, dan mengotomatiskan berbagai perangkat dalam rumah. Dengan sistem Smart Home ini, pengguna dapat merasakan banyak manfaat seperti peningkatan kenyamanan, keamanan yang lebih optimal, dan efisiensi waktu dengan mengotomatisasi banyak aktivitas rumah tangga melalui sensor ataupun dari kendali jarak jauh.
 
