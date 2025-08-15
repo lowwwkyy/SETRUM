@@ -29,6 +29,7 @@ export default function AppPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#f8fafc",
     paddingTop: 40,
     paddingHorizontal: 20,
   },

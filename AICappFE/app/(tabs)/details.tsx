@@ -2,10 +2,9 @@ import { DATA_1M } from "@/components/Utils/data";
 import { Ionicons } from "@expo/vector-icons";
 import { Box } from "@gluestack-ui/themed";
 import { LinearGradient, useFont, vec } from "@shopify/react-native-skia";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
-  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -31,23 +30,27 @@ export default function DetailsScreen() {
   const [monthlyBudget, setMonthlyBudget] = useState(500000);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [budgetInput, setBudgetInput] = useState("500000");
+
+  // Monitor modal state changes
+  useEffect(() => {
+    console.log("Modal state changed to:", isEditModalVisible);
+  }, [isEditModalVisible]);
+
   const spentAmount = 251900;
   const remainingAmount = monthlyBudget - spentAmount;
   const spentPercentage = (spentAmount / monthlyBudget) * 100;
 
-  // Generate spending data based on actual consumption data
   const spendingData = useMemo(() => {
-    // Convert energy consumption to cost (IDR per kWh = 1500)
     const costPerKwh = 1500;
-    const baseBudget = 500000; // Use fixed base budget to prevent infinite loop
+    const baseBudget = 500000;
     return DATA_1M.slice(0, 16).map((item, index) => ({
       day: index + 1,
-      actualSpent: item.highTmp * costPerKwh * 0.12, // Scale down for realistic spending
+      actualSpent: item.highTmp * costPerKwh * 0.12,
       forecastSpent:
-        (baseBudget / 30) * (index + 1) + (Math.random() * 5000 - 2500), // Budget line with variance
-      forecastOverspend: item.highTmp * costPerKwh * 0.18, // Higher spending forecast
+        (baseBudget / 30) * (index + 1) + (Math.random() * 5000 - 2500),
+      forecastOverspend: item.highTmp * costPerKwh * 0.18,
     }));
-  }, []); // Remove monthlyBudget dependency to prevent infinite loop
+  }, []);
 
   const [selectedChart, setSelectedChart] = useState<
     "spent" | "forecast" | "overspend"
@@ -60,7 +63,6 @@ export default function DetailsScreen() {
     },
   });
 
-  // Get current chart data based on selection
   const currentChartData = useMemo(() => {
     return spendingData.map((item) => ({
       day: item.day,
@@ -73,21 +75,19 @@ export default function DetailsScreen() {
     }));
   }, [spendingData, selectedChart]);
 
-  // Calculate daily averages
-  const dailyAverage = spentAmount / 16; // Assuming 16 days have passed
+  const dailyAverage = spentAmount / 16;
   const dailyRecommended = monthlyBudget / 30;
 
-  // Handle budget editing
   const handleEditBudget = () => {
-    console.log("Edit budget button pressed");
-    // Use simple string conversion instead of locale formatting
+    console.log("Edit budget button pressed!");
+    console.log("Current modal state:", isEditModalVisible);
     setBudgetInput(monthlyBudget.toString());
     setIsEditModalVisible(true);
+    console.log("Modal should now be set to true");
   };
 
   const handleSaveBudget = () => {
     console.log("Save budget pressed, input:", budgetInput);
-    // Remove commas and non-numeric characters, then convert to number
     const cleanInput = budgetInput.replace(/[^0-9]/g, "");
     const newBudget = parseInt(cleanInput);
 
@@ -116,7 +116,6 @@ export default function DetailsScreen() {
   };
 
   const formatCurrency = (amount: string) => {
-    // Remove all non-numeric characters
     const numericValue = amount.replace(/[^0-9]/g, "");
     return numericValue;
   };
@@ -127,30 +126,13 @@ export default function DetailsScreen() {
     console.log("Cleaned:", cleaned);
     setBudgetInput(cleaned);
   };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <Text style={styles.title}>Budget Overview</Text>
         <Text style={styles.monthLabel}>JULY 2025</Text>
-
-        {/* Debug button - temporary */}
-        <TouchableOpacity
-          style={{
-            backgroundColor: "#007AFF",
-            padding: 10,
-            borderRadius: 5,
-            marginBottom: 10,
-            alignItems: "center",
-          }}
-          onPress={() => {
-            console.log("Debug button pressed");
-            Alert.alert("Debug", "Button working!");
-          }}
-        >
-          <Text style={{ color: "white" }}>Test Button (Debug)</Text>
-        </TouchableOpacity>
-
         {/* Budget Progress Section */}
         <View style={styles.budgetCard}>
           <View style={styles.budgetHeader}>
@@ -167,10 +149,6 @@ export default function DetailsScreen() {
             <TouchableOpacity
               style={styles.budgetChange}
               onPress={handleEditBudget}
-              onPressIn={() => console.log("Button press in")}
-              onPressOut={() => console.log("Button press out")}
-              activeOpacity={0.7}
-              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
             >
               <Ionicons name="pencil" size={18} color="#007AFF" />
               <Text style={styles.changeText}>Edit</Text>
@@ -202,7 +180,6 @@ export default function DetailsScreen() {
             </View>
           </View>
         </View>
-
         {/* Trend Section */}
         <View style={styles.trendSection}>
           <Text style={styles.sectionTitle}>Trend</Text>
@@ -314,7 +291,6 @@ export default function DetailsScreen() {
             </CartesianChart>
           </Box>
         </View>
-
         {/* Daily Stats */}
         <View style={styles.dailyStats}>
           <View style={styles.statItem}>
@@ -333,22 +309,14 @@ export default function DetailsScreen() {
       </ScrollView>
 
       {/* Budget Edit Modal */}
-      <Modal
-        visible={isEditModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={handleCancelEdit}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={handleCancelEdit}
-        >
+      {isEditModalVisible && (
+        <View style={styles.modalOverlay}>
           <TouchableOpacity
-            style={styles.modalContent}
+            style={styles.modalBackdrop}
             activeOpacity={1}
-            onPress={() => {}} // Prevent modal close when tapping content
-          >
+            onPress={handleCancelEdit}
+          />
+          <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit Monthly Budget</Text>
 
             <View style={styles.inputContainer}>
@@ -382,9 +350,9 @@ export default function DetailsScreen() {
                 <Text style={styles.saveButtonText}>Save</Text>
               </TouchableOpacity>
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -393,6 +361,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f8fafc",
+    paddingTop: 30,
   },
   content: {
     flex: 1,
@@ -604,27 +573,40 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
   },
-  // Modal styles
+
   modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 1000,
+  },
+  modalBackdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   modalContent: {
     backgroundColor: "white",
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 24,
     width: "85%",
-    maxWidth: 400,
+    maxWidth: 320,
+    alignSelf: "center",
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 8,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 15,
   },
   modalTitle: {
     fontSize: 20,
