@@ -391,6 +391,7 @@ function ToolTip({ x, y }: { x: SharedValue<number>; y: SharedValue<number> }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#f8fafc",
     paddingTop: 40,
     paddingHorizontal: 10,
   },
