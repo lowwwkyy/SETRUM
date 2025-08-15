@@ -33,15 +33,12 @@ export default function LoginScreen() {
 
   const { user, isLoggedIn, logout, refreshAuthStatus } = useAuth();
 
-  // Untuk Expo development, selalu gunakan Web Client ID
-  // Platform.select tidak akurat untuk Expo managed workflow
   const clientId =
     process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
     "823414483818-s19nphuvt9gn656nu1i3r4nteeh94ebm.apps.googleusercontent.com";
 
-  // Generate redirect URI untuk development - paksa gunakan localhost
   const redirectUri = __DEV__
-    ? "http://localhost:19006" // Force localhost untuk development
+    ? "http://localhost:19006" // Force localhost for development
     : AuthSession.makeRedirectUri({ scheme: "aic" }); // Production scheme
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
@@ -74,7 +71,6 @@ export default function LoginScreen() {
   const handleGoogleLoginSuccess = async (accessToken: string) => {
     setIsGoogleLoading(true);
     try {
-      // Dapatkan informasi user dari Google
       const userInfoResponse = await fetch(
         `https://www.googleapis.com/oauth2/v2/userinfo?access_token=${accessToken}`
       );
@@ -82,7 +78,6 @@ export default function LoginScreen() {
 
       console.log("Google User Info:", userInfo);
 
-      // Buat user object
       const user: User = {
         id: userInfo.id,
         name: userInfo.name,
@@ -91,14 +86,12 @@ export default function LoginScreen() {
         provider: "google",
       };
 
-      // Simpan user dan token
       await AuthService.saveUser(user);
       await AuthService.saveToken(accessToken);
 
-      // Refresh auth status
       refreshAuthStatus();
 
-      // Optional: Kirim ke backend untuk validasi/registrasi
+      // Optional: Send to backend for validation/registration
       // try {
       //   const backendResponse = await ApiService.loginWithGoogle(accessToken, userInfo);
       //   await AuthService.saveToken(backendResponse.token);
@@ -106,7 +99,7 @@ export default function LoginScreen() {
       //   console.error('Backend validation error:', error);
       // }
 
-      Alert.alert("Login Berhasil", `Selamat datang, ${userInfo.name}!`, [
+      Alert.alert("Login Successful", `Welcome, ${userInfo.name}!`, [
         {
           text: "OK",
           onPress: () => router.replace("/(tabs)"),
@@ -114,7 +107,7 @@ export default function LoginScreen() {
       ]);
     } catch (error) {
       console.error("Error fetching user info:", error);
-      Alert.alert("Error", "Gagal mendapatkan informasi user");
+      Alert.alert("Error", "Failed to get user information");
     } finally {
       setIsGoogleLoading(false);
     }
@@ -122,7 +115,7 @@ export default function LoginScreen() {
 
   const handleGoogleLogin = async () => {
     if (!request) {
-      Alert.alert("Error", "Google Auth tidak tersedia");
+      Alert.alert("Error", "Google Auth not available");
       return;
     }
 
@@ -140,7 +133,7 @@ export default function LoginScreen() {
       console.error("Google login error:", error);
       Alert.alert(
         "Error",
-        "Gagal login dengan Google: " +
+        "Failed to login with Google: " +
           (error instanceof Error ? error.message : String(error))
       );
     } finally {
@@ -150,7 +143,7 @@ export default function LoginScreen() {
 
   const handleEmailLogin = async () => {
     if (!email || !password) {
-      Alert.alert("Error", "Silakan isi email dan password");
+      Alert.alert("Error", "Please fill in email and password");
       return;
     }
 
@@ -170,7 +163,7 @@ export default function LoginScreen() {
 
       refreshAuthStatus();
 
-      // Optional: Gunakan API service untuk login ke backend
+      // Optional: Use API service to login to backend
       // try {
       //   const response = await ApiService.loginWithEmail(email, password);
       //   await AuthService.saveUser(response.user);
@@ -181,7 +174,7 @@ export default function LoginScreen() {
       //   return;
       // }
 
-      Alert.alert("Login Berhasil", "Anda berhasil login!", [
+      Alert.alert("Login Successful", "You have successfully logged in!", [
         {
           text: "OK",
           onPress: () => router.replace("/(tabs)"),
@@ -189,20 +182,20 @@ export default function LoginScreen() {
       ]);
     } catch (error) {
       console.error("Login error:", error);
-      Alert.alert("Error", "Email atau password salah");
+      Alert.alert("Error", "Wrong email or password");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleLogout = () => {
-    Alert.alert("Logout", "Apakah Anda yakin ingin keluar?", [
+    Alert.alert("Logout", "Are you sure you want to log out?", [
       {
-        text: "Batal",
+        text: "Cancel",
         style: "cancel",
       },
       {
-        text: "Keluar",
+        text: "Logout",
         style: "destructive",
         onPress: async () => {
           await logout();
@@ -212,7 +205,6 @@ export default function LoginScreen() {
     ]);
   };
 
-  // Jika user sudah login, tampilkan halaman profile
   if (isLoggedIn && user) {
     return (
       <SafeAreaView style={styles.container}>
@@ -222,10 +214,11 @@ export default function LoginScreen() {
           style={styles.profileContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Profil Saya</Text>
-            <Text style={styles.subtitle}>Kelola akun dan pengaturan Anda</Text>
+            <Text style={styles.title}>My Profile</Text>
+            <Text style={styles.subtitle}>
+              Manage your account and settings
+            </Text>
           </View>
 
           {/* User Profile Section */}
@@ -259,9 +252,9 @@ export default function LoginScreen() {
                 <Text style={styles.settingIconText}>👤</Text>
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>Edit Profil</Text>
+                <Text style={styles.settingTitle}>Edit Profile</Text>
                 <Text style={styles.settingSubtitle}>
-                  Ubah informasi pribadi Anda
+                  Change your personal information
                 </Text>
               </View>
               <Text style={styles.settingArrow}>›</Text>
@@ -272,9 +265,9 @@ export default function LoginScreen() {
                 <Text style={styles.settingIconText}>🔔</Text>
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>Notifikasi</Text>
+                <Text style={styles.settingTitle}>Notifications</Text>
                 <Text style={styles.settingSubtitle}>
-                  Atur preferensi notifikasi
+                  Set notification preferences
                 </Text>
               </View>
               <Text style={styles.settingArrow}>›</Text>
@@ -285,9 +278,9 @@ export default function LoginScreen() {
                 <Text style={styles.settingIconText}>🔒</Text>
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>Privasi & Keamanan</Text>
+                <Text style={styles.settingTitle}>Privacy & Security</Text>
                 <Text style={styles.settingSubtitle}>
-                  Kelola pengaturan keamanan
+                  Manage security settings
                 </Text>
               </View>
               <Text style={styles.settingArrow}>›</Text>
@@ -298,9 +291,9 @@ export default function LoginScreen() {
                 <Text style={styles.settingIconText}>🌙</Text>
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>Mode Gelap</Text>
+                <Text style={styles.settingTitle}>Dark Mode</Text>
                 <Text style={styles.settingSubtitle}>
-                  Ubah tampilan aplikasi
+                  Change app appearance
                 </Text>
               </View>
               <Text style={styles.settingArrow}>›</Text>
@@ -311,8 +304,8 @@ export default function LoginScreen() {
                 <Text style={styles.settingIconText}>❓</Text>
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>Bantuan</Text>
-                <Text style={styles.settingSubtitle}>FAQ dan dukungan</Text>
+                <Text style={styles.settingTitle}>Help</Text>
+                <Text style={styles.settingSubtitle}>FAQ and support</Text>
               </View>
               <Text style={styles.settingArrow}>›</Text>
             </TouchableOpacity>
@@ -323,7 +316,7 @@ export default function LoginScreen() {
               style={styles.logoutButton}
               onPress={handleLogout}
             >
-              <Text style={styles.logoutButtonText}>Keluar</Text>
+              <Text style={styles.logoutButtonText}>Logout</Text>
             </TouchableOpacity>
           </View>
 
@@ -342,8 +335,8 @@ export default function LoginScreen() {
 
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title}>Selamat Datang</Text>
-          <Text style={styles.subtitle}>Silakan login ke akun Anda</Text>
+          <Text style={styles.title}>Welcome</Text>
+          <Text style={styles.subtitle}>Please login to your account</Text>
         </View>
 
         <View style={styles.form}>
@@ -374,7 +367,7 @@ export default function LoginScreen() {
           </View>
 
           <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>Lupa Password?</Text>
+            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -391,7 +384,7 @@ export default function LoginScreen() {
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>atau</Text>
+            <Text style={styles.dividerText}>or</Text>
             <View style={styles.dividerLine} />
           </View>
           <TouchableOpacity
@@ -412,16 +405,16 @@ export default function LoginScreen() {
                   }}
                   style={styles.googleIcon}
                 />
-                <Text style={styles.googleButtonText}>Login dengan Google</Text>
+                <Text style={styles.googleButtonText}>Login with Google</Text>
               </>
             )}
           </TouchableOpacity>
         </View>
 
         <View style={styles.signupContainer}>
-          <Text style={styles.signupText}>Belum punya akun? </Text>
-          <TouchableOpacity>
-            <Text style={styles.signupLink}>Daftar di sini</Text>
+          <Text style={styles.signupText}>Don&apos;t have an account? </Text>
+          <TouchableOpacity onPress={() => router.push("/register" as any)}>
+            <Text style={styles.signupLink}>Sign up here</Text>
           </TouchableOpacity>
         </View>
       </View>
