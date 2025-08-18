@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Sign-In Test</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+    <h1>Google Sign-In Backend Tester (v2)</h1>
+    <p>
+        After you sign in, open the browser's developer console (F12) 
+        to find your idToken. Then, use that token in Postman to test your server.
+    </p>
+
+    <div id="buttonDiv"></div>
+
+    <script>
+        // This function is called when the Google library is loaded
+        function handleGoogleLibraryLoad() {
+            // 1. Initialize the Google library
+            google.accounts.id.initialize({
+                client_id: "815456127882-id76cli09tcs5kf172ltuq4dvs378ilc.apps.googleusercontent.com", // <-- IMPORTANT: Put your Web Client ID here
+                callback: handleCredentialResponse
+            });
+
+            // 2. Render the Google Sign-In button
+            google.accounts.id.renderButton(
+                document.getElementById("buttonDiv"),
+                { theme: "outline", size: "large" }  // Customize the button
+            );
+
+            // Optional: You can also prompt the user to sign in automatically
+            // google.accounts.id.prompt(); 
+        }
+
+        // 3. This function is called after the user signs in
+        function handleCredentialResponse(response) {
+            const idToken = response.credential;
+            console.log("--- COPY YOUR ID TOKEN ---");
+            console.log(idToken);
+            console.log("--------------------------");
+            alert("Success! Check the developer console (F12) for your ID Token.");
+        }
+
+        // Set the onload callback
+        window.onload = handleGoogleLibraryLoad;
+    </script>
+</body>
+</html>
