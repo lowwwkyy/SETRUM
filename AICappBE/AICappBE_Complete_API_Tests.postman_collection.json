@@ -1,0 +1,1030 @@
+{
+  "info": {
+    "name": "AICappBE Complete API Tests",
+    "description": "Complete API testing collection for AICappBE backend including devices and electricity usage",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "User Registration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\",\n  \"displayName\": \"Test User\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/signup",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "signup"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.test(\"Registration successful\", function () {",
+                  "        pm.response.to.have.status(201);",
+                  "        pm.expect(pm.response.json()).to.have.property('message');",
+                  "    });",
+                  "} else {",
+                  "    pm.test(\"Registration failed\", function () {",
+                  "        pm.response.to.not.have.status(201);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "User Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set(\"auth_token\", response.token);",
+                  "    pm.environment.set(\"user_id\", response.userId);",
+                  "    ",
+                  "    pm.test(\"Login successful\", function () {",
+                  "        pm.response.to.have.status(200);",
+                  "        pm.expect(response).to.have.property('token');",
+                  "        pm.expect(response).to.have.property('userId');",
+                  "        pm.expect(response).to.have.property('displayName');",
+                  "    });",
+                  "} else {",
+                  "    pm.test(\"Login failed\", function () {",
+                  "        pm.response.to.not.have.status(200);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Google Sign-In",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idToken\": \"YOUR_GOOGLE_ID_TOKEN_HERE\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/google/signin",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "google", "signin"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set(\"auth_token\", response.token);",
+                  "    pm.environment.set(\"user_id\", response.user.id);",
+                  "    ",
+                  "    pm.test(\"Google Sign-In successful\", function () {",
+                  "        pm.response.to.have.status(200);",
+                  "        pm.expect(response).to.have.property('token');",
+                  "        pm.expect(response).to.have.property('user');",
+                  "    });",
+                  "} else {",
+                  "    pm.test(\"Google Sign-In failed\", function () {",
+                  "        pm.response.to.not.have.status(200);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Device Management",
+      "item": [
+        {
+          "name": "Create Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"television\",\n  \"isOn\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/device",
+              "host": ["{{base_url}}"],
+              "path": ["api", "device"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set(\"device_id\", response._id);",
+                  "    ",
+                  "    pm.test(\"Device created successfully\", function () {",
+                  "        pm.response.to.have.status(201);",
+                  "        pm.expect(response).to.have.property('_id');",
+                  "        pm.expect(response).to.have.property('type');",
+                  "        pm.expect(response).to.have.property('isOn');",
+                  "    });",
+                  "} else {",
+                  "    pm.test(\"Device creation failed\", function () {",
+                  "        pm.response.to.not.have.status(201);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get All Devices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/device",
+              "host": ["{{base_url}}"],
+              "path": ["api", "device"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get devices successful\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Device by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/device/{{device_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "device", "{{device_id}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get device by ID successful\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.have.property('_id');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Device Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isOn\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/device/{{device_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "device", "{{device_id}}", "status"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Update device status successful\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.have.property('isOn', false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Devices by Type",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/device/type/television",
+              "host": ["{{base_url}}"],
+              "path": ["api", "device", "type", "television"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get devices by type successful\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Devices by Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/device/status/off",
+              "host": ["{{base_url}}"],
+              "path": ["api", "device", "status", "off"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get devices by status successful\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Device",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"television\",\n  \"isOn\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/device/{{device_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "device", "{{device_id}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Update device successful\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.have.property('_id');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Device",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/device/{{device_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "device", "{{device_id}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Delete device successful\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Electricity Usage",
+      "item": [
+        {
+          "name": "Create Usage Record",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceId\": \"{{device_id}}\",\n  \"date\": \"2024-01-15T00:00:00.000Z\",\n  \"dailyKwh\": 2.5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/usage",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usage"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set(\"usage_id\", response._id);",
+                  "    ",
+                  "    pm.test(\"Usage record created successfully\", function () {",
+                  "        pm.response.to.have.status(201);",
+                  "        pm.expect(response).to.have.property('_id');",
+                  "        pm.expect(response).to.have.property('dailyKwh');",
+                  "    });",
+                  "} else {",
+                  "    pm.test(\"Usage record creation failed\", function () {",
+                  "        pm.response.to.not.have.status(201);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get All Usage Records",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usage",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usage"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get usage records successful\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Device Usage",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usage/device/{{device_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usage", "device", "{{device_id}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get device usage successful\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Usage Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usage/summary",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usage", "summary"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get usage summary successful\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Daily Total kWh",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usage/daily-total?date=2024-01-15T00:00:00.000Z",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usage", "daily-total"],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2024-01-15T00:00:00.000Z"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get daily total kWh successful\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.have.property('totalKwh');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Usage by Date Range",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usage/date-range?startDate=2024-01-01T00:00:00.000Z&endDate=2024-01-31T23:59:59.999Z",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usage", "date-range"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01T00:00:00.000Z"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-01-31T23:59:59.999Z"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get usage by date range successful\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Usage Record",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dailyKwh\": 3.0\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/usage/{{usage_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usage", "{{usage_id}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Update usage record successful\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.have.property('dailyKwh', 3.0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Usage Record",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/usage/{{usage_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usage", "{{usage_id}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Delete usage record successful\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "User Management",
+      "item": [
+        {
+          "name": "Get User Account Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user/account",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user", "account"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Get account details successful\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.have.property('_id');",
+                  "    pm.expect(pm.response.json()).to.have.property('email');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Monthly Budget",
+      "item": [
+        {
+          "name": "Set/Update Budget",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"year\": 2025,\n  \"month\": 1,\n  \"amount\": 50,\n  \"pricePerKwh\": 0.15,\n  \"currency\": \"USD\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/budget",
+              "host": ["{{base_url}}"],
+              "path": ["api", "budget"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {"exec": [
+                "pm.test(\"Budget upsert successful\", function () {",
+                "  pm.response.to.have.status(200);",
+                "  const res = pm.response.json();",
+                "  pm.expect(res).to.have.property('amount');",
+                "});"
+              ]}
+            }
+          ]
+        },
+        {
+          "name": "Get Budget",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{auth_token}}" } ],
+            "url": {
+              "raw": "{{base_url}}/api/budget?year=2025&month=1",
+              "host": ["{{base_url}}"],
+              "path": ["api","budget"],
+              "query": [
+                {"key":"year","value":"2025"},
+                {"key":"month","value":"1"}
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {"listen":"test","script":{"exec":[
+              "pm.test(\"Get budget successful\", function () {",
+              "  pm.response.to.have.status(200);",
+              "});"
+            ]}}
+          ]
+        },
+        {
+          "name": "Get Budget Progress",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{auth_token}}" } ],
+            "url": {
+              "raw": "{{base_url}}/api/budget/progress?year=2025&month=1",
+              "host": ["{{base_url}}"],
+              "path": ["api","budget","progress"],
+              "query": [
+                {"key":"year","value":"2025"},
+                {"key":"month","value":"1"}
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {"listen":"test","script":{"exec":[
+              "pm.test(\"Get budget progress successful\", function () {",
+              "  pm.response.to.have.status(200);",
+              "  const res = pm.response.json();",
+              "  pm.expect(res).to.have.property('totalKwh');",
+              "});"
+            ]}}
+          ]
+        },
+        {
+          "name": "Delete Budget",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{auth_token}}" } ],
+            "url": {
+              "raw": "{{base_url}}/api/budget?year=2025&month=1",
+              "host": ["{{base_url}}"],
+              "path": ["api","budget"],
+              "query": [
+                {"key":"year","value":"2025"},
+                {"key":"month","value":"1"}
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {"listen":"test","script":{"exec":[
+              "pm.test(\"Delete budget successful\", function () {",
+              "  pm.response.to.have.status(200);",
+              "});"
+            ]}}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Error Testing",
+      "item": [
+        {
+          "name": "Registration - Duplicate Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\",\n  \"displayName\": \"Another User\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/signup",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "signup"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Should return 400 for duplicate email\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json()).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - Wrong Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"wrongpassword\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Should return 400 for wrong password\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json()).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Account - No Token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user/account",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user", "account"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Should return 401 for no token\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(pm.response.json()).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Device - Invalid Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"invalid_type\",\n  \"isOn\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/device",
+              "host": ["{{base_url}}"],
+              "path": ["api", "device"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Should return 400 for invalid device type\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json()).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
