@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
+const { signupValidation, loginValidation, googleSigninValidation } = require('../middleware/validation');
 
 const router = express.Router();
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -10,7 +11,7 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 // --- Standard Email & Password Routes ---
 
 // POST /auth/signup
-router.post('/signup', async (req, res) => {
+router.post('/signup', signupValidation, async (req, res) => {
     // ... (paste the signup logic from the previous response here)
     const { email, password, displayName } = req.body;
     try {
@@ -29,7 +30,7 @@ router.post('/signup', async (req, res) => {
 });
 
 // POST /auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', loginValidation, async (req, res) => {
     // ... (paste the login logic from the previous response here)
     const { email, password } = req.body;
     try {
@@ -52,7 +53,7 @@ router.post('/login', async (req, res) => {
 
 
 // POST /auth/google/signin
-router.post('/google/signin', async (req, res) => {
+router.post('/google/signin', googleSigninValidation, async (req, res) => {
     // ... (paste the google signin logic from the previous response here)
     const { idToken } = req.body;
     try {
