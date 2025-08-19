@@ -12,6 +12,7 @@ import {
 } from "@shopify/react-native-skia";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  FlatList,
   ScrollView,
   StyleSheet,
   Text,
@@ -51,7 +52,9 @@ export default function AppPage() {
     "1W" | "1M" | "3M"
   >("1M");
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
+  const [currentSliderPage, setCurrentSliderPage] = useState(0);
   const chartRef = useRef<CartesianActionsHandle<typeof state>>(null);
+  const sliderRef = useRef<FlatList>(null);
 
   // Update state when chartData changes to show latest value
   useEffect(() => {
@@ -133,6 +136,10 @@ export default function AppPage() {
       Heater: 0.24, // 25kWh ÷ 1050kWh ≈ 0.24%
       Refrigerator: 0.24, // 25kWh ÷ 1050kWh ≈ 0.24%
       Lighting: 0.14, // 15kWh ÷ 1050kWh ≈ 0.14%
+      "Washing Machine": 0.18, // 18kWh ÷ 1050kWh ≈ 0.18%
+      TV: 0.12, // 12kWh ÷ 1050kWh ≈ 0.12%
+      Microwave: 0.08, // 8kWh ÷ 1050kWh ≈ 0.08%
+      Computer: 0.15, // 15kWh ÷ 1050kWh ≈ 0.15%
     };
 
     const multiplier = deviceMultipliers[deviceName] || 0.25;
@@ -220,14 +227,58 @@ export default function AppPage() {
           } kWh`,
           icon: "bulb" as const,
         },
+        {
+          name: "Washing Machine",
+          consumption: `${
+            Math.round(getDeviceTotalConsumption("Washing Machine") * 100) / 100
+          } kWh`,
+          icon: "water" as const,
+        },
+        {
+          name: "TV",
+          consumption: `${
+            Math.round(getDeviceTotalConsumption("TV") * 100) / 100
+          } kWh`,
+          icon: "tv" as const,
+        },
+        {
+          name: "Microwave",
+          consumption: `${
+            Math.round(getDeviceTotalConsumption("Microwave") * 100) / 100
+          } kWh`,
+          icon: "restaurant" as const,
+        },
+        {
+          name: "Computer",
+          consumption: `${
+            Math.round(getDeviceTotalConsumption("Computer") * 100) / 100
+          } kWh`,
+          icon: "desktop" as const,
+        },
       ];
     };
 
     return getDevicesData(selectedTimeFrame);
   }, [selectedTimeFrame]);
 
+  // Utility function to chunk array into groups of specified size
+  const chunkArray = <T,>(array: T[], size: number): T[][] => {
+    const result: T[][] = [];
+    for (let i = 0; i < array.length; i += size) {
+      result.push(array.slice(i, i + size));
+    }
+    return result;
+  };
+
+  // Split devices into pages of maximum 6 devices each
+  const devicePages = chunkArray(devicesData, 6);
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={styles.scrollContent}
+    >
       <Text style={styles.title}>
         {selectedDevice
           ? `${selectedDevice} - Energy Usage`
@@ -238,17 +289,16 @@ export default function AppPage() {
         width="100%"
         $dark-bg="$black"
         $light-bg="$white"
-        flex={1}
         alignItems="center"
         paddingHorizontal={5}
         paddingVertical={30}
       >
-        <Box paddingTop={7} width="95%" height={400}>
+        <Box paddingTop={7} width="95%" height={350}>
           <CartesianChart
             data={chartData}
             xKey="day"
             yKeys={["highTmp"]}
-            domainPadding={{ top: 30 }}
+            domainPadding={{ top: 80 }}
             axisOptions={{
               font,
               labelColor,
@@ -338,46 +388,96 @@ export default function AppPage() {
             <Text style={styles.sectionTitle}>
               {selectedDevice ? `${selectedDevice} Usage` : "Devices"}
             </Text>
-            <View style={styles.devicesGrid}>
-              {devicesData.map((device, index) => (
-                <TouchableOpacity
-                  key={index}
-                  onPress={() => handleDevicePress(device.name)}
-                  style={[
-                    styles.deviceCard,
-                    selectedDevice === device.name && styles.selectedDeviceCard,
-                  ]}
-                >
-                  <View style={styles.deviceIconContainer}>
-                    <Ionicons
-                      name={device.icon}
-                      size={24}
-                      color={
-                        selectedDevice === device.name ? "#4285F4" : "black"
-                      }
-                    />
-                  </View>
-                  <Text
+
+            {/* Devices Slider */}
+            <FlatList
+              ref={sliderRef}
+              data={devicePages}
+              horizontal
+              pagingEnabled
+              keyExtractor={(_, index) => `device-page-${index}`}
+              showsHorizontalScrollIndicator={false}
+              style={styles.deviceSlider}
+              snapToInterval={330}
+              decelerationRate="fast"
+              getItemLayout={(data, index) => ({
+                length: 330,
+                offset: 330 * index,
+                index,
+              })}
+              onScroll={(event) => {
+                const pageIndex = Math.round(
+                  event.nativeEvent.contentOffset.x / 330
+                );
+                setCurrentSliderPage(pageIndex);
+              }}
+              scrollEventThrottle={16}
+              renderItem={({ item: pageDevices }) => (
+                <View style={styles.devicesGrid}>
+                  {pageDevices.map((device: any, index: number) => (
+                    <TouchableOpacity
+                      key={device.name}
+                      onPress={() => handleDevicePress(device.name)}
+                      style={[
+                        styles.deviceCard,
+                        selectedDevice === device.name &&
+                          styles.selectedDeviceCard,
+                      ]}
+                    >
+                      <View style={styles.deviceIconContainer}>
+                        <Ionicons
+                          name={device.icon}
+                          size={24}
+                          color={
+                            selectedDevice === device.name ? "#4285F4" : "black"
+                          }
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.deviceName,
+                          selectedDevice === device.name &&
+                            styles.selectedDeviceName,
+                        ]}
+                      >
+                        {device.name}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.deviceConsumption,
+                          selectedDevice === device.name &&
+                            styles.selectedDeviceConsumption,
+                        ]}
+                      >
+                        {device.consumption}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            />
+
+            {/* Slider Dots Indicator */}
+            {devicePages.length > 1 && (
+              <View style={styles.sliderDotsContainer}>
+                {devicePages.map((_, index) => (
+                  <TouchableOpacity
+                    key={index}
                     style={[
-                      styles.deviceName,
-                      selectedDevice === device.name &&
-                        styles.selectedDeviceName,
+                      styles.sliderDot,
+                      currentSliderPage === index && styles.activeDot,
                     ]}
-                  >
-                    {device.name}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.deviceConsumption,
-                      selectedDevice === device.name &&
-                        styles.selectedDeviceConsumption,
-                    ]}
-                  >
-                    {device.consumption}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                    onPress={() => {
+                      setCurrentSliderPage(index);
+                      sliderRef.current?.scrollToOffset({
+                        offset: index * 330,
+                        animated: true,
+                      });
+                    }}
+                  />
+                ))}
+              </View>
+            )}
           </View>
         </Box>
       </Box>
@@ -394,6 +494,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#f8fafc",
     paddingTop: 40,
     paddingHorizontal: 10,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 50, // Extra bottom padding for complete scroll
   },
   backButton: {
     marginBottom: 16,
@@ -444,7 +548,7 @@ const styles = StyleSheet.create({
     color: "black",
   },
   devicesSection: {
-    marginBottom: 20,
+    marginBottom: 40, // Increased bottom margin
     paddingHorizontal: 5,
   },
   sectionTitle: {
@@ -453,10 +557,16 @@ const styles = StyleSheet.create({
     color: "black",
     marginBottom: 15,
   },
+  deviceSlider: {
+    height: 450, // Increased height for slider to prevent cut-off
+  },
   devicesGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
+    width: 330, // Adjusted width for each page
+    paddingHorizontal: 10,
+    minHeight: 260, // Minimum height to prevent content cut-off
   },
   deviceCard: {
     width: "48%",
@@ -506,5 +616,26 @@ const styles = StyleSheet.create({
   },
   selectedDeviceConsumption: {
     color: "#4285F4",
+  },
+  // Slider Dots Styles
+  sliderDotsContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 15,
+    paddingHorizontal: 10,
+  },
+  sliderDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#D1D5DB",
+    marginHorizontal: 4,
+  },
+  activeDot: {
+    backgroundColor: "#4285F4",
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
 });
