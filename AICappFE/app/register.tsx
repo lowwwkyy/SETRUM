@@ -1,4 +1,4 @@
-import { AuthService } from "@/services/AuthService";
+import { ApiService } from "@/services/AuthService";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useState } from "react";
@@ -76,69 +76,29 @@ export default function RegisterScreen() {
     setIsLoading(true);
 
     try {
-      // API call simulation for registration
-      const response = await fetch("YOUR_API_ENDPOINT/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-          password: formData.password,
-          phone: formData.phone,
-        }),
-      });
-
-      if (response.ok) {
-        const userData = await response.json();
-
-        await AuthService.saveUser(userData.user);
-
-        if (userData.token) {
-          await AuthService.saveToken(userData.token);
-        }
-
-        Alert.alert(
-          "Registration Successful",
-          "Your account has been created successfully!",
-          [
-            {
-              text: "OK",
-              onPress: () => router.replace("/(tabs)"),
-            },
-          ]
-        );
-      } else {
-        const errorData = await response.json();
-        Alert.alert("Error", errorData.message || "Registration failed");
-      }
-    } catch (error) {
-      console.error("Registration error:", error);
-
-      const mockUser = {
-        id: Date.now().toString(),
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        phone: formData.phone,
-        name: `${formData.firstName} ${formData.lastName}`,
-        picture: undefined,
-        provider: "email" as const,
-      };
-
-      await AuthService.saveUser(mockUser);
+      // Call backend API for registration
+      const displayName = `${formData.firstName} ${formData.lastName}`;
+      await ApiService.registerWithEmail(
+        formData.email,
+        formData.password,
+        displayName
+      );
 
       Alert.alert(
         "Registration Successful",
-        "Your account has been created successfully!",
+        "Your account has been created successfully! Please login to continue.",
         [
           {
             text: "OK",
-            onPress: () => router.replace("/(tabs)"),
+            onPress: () => router.replace("/(tabs)/login"),
           },
         ]
+      );
+    } catch (error) {
+      console.error("Registration error:", error);
+      Alert.alert(
+        "Error",
+        error instanceof Error ? error.message : "Registration failed"
       );
     } finally {
       setIsLoading(false);

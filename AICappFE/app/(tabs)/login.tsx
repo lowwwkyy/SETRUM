@@ -2,7 +2,7 @@ import * as AuthSession from "expo-auth-session";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as WebBrowser from "expo-web-browser";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../hooks/useAuth";
-import { AuthService, User } from "../../services/AuthService";
+import { AuthService, ApiService, User } from "../../services/AuthService";
 WebBrowser.maybeCompleteAuthSession();
 
 const discovery = {
@@ -38,23 +38,57 @@ export default function LoginScreen() {
     "823414483818-s19nphuvt9gn656nu1i3r4nteeh94ebm.apps.googleusercontent.com";
 
   const redirectUri = __DEV__
-    ? "http://localhost:19006" // Force localhost for development
-    : AuthSession.makeRedirectUri({ scheme: "aic" }); // Production scheme
+    ? "http://localhost:19006"
+    : AuthSession.makeRedirectUri({ scheme: "aic" });
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
       clientId: clientId!,
       scopes: ["openid", "profile", "email"],
       redirectUri: redirectUri,
+      responseType: AuthSession.ResponseType.IdToken,
     },
     discovery
+  );
+
+  const handleGoogleLoginSuccess = useCallback(
+    async (idToken: string) => {
+      setIsGoogleLoading(true);
+      try {
+        const backendResponse = await ApiService.loginWithGoogle(idToken);
+        await AuthService.saveUser(backendResponse.user);
+        await AuthService.saveToken(backendResponse.token);
+
+        refreshAuthStatus();
+
+        Alert.alert(
+          "Login Successful",
+          `Welcome, ${backendResponse.user.name}!`,
+          [
+            {
+              text: "OK",
+              onPress: () => router.replace("/(tabs)"),
+            },
+          ]
+        );
+      } catch (error) {
+        console.error("Google login error:", error);
+        Alert.alert(
+          "Error",
+          error instanceof Error ? error.message : "Google login failed"
+        );
+      } finally {
+        setIsGoogleLoading(false);
+      }
+    },
+    [refreshAuthStatus]
   );
 
   useEffect(() => {
     if (response?.type === "success") {
       const { authentication } = response;
-      if (authentication?.accessToken) {
-        handleGoogleLoginSuccess(authentication.accessToken);
+      if (authentication?.idToken) {
+        handleGoogleLoginSuccess(authentication.idToken);
       }
     } else if (response?.type === "error") {
       console.error("OAuth Error:", response.error);
@@ -66,52 +100,7 @@ export default function LoginScreen() {
     } else if (response?.type === "cancel") {
       console.log("OAuth Cancelled by user");
     }
-  }, [response]);
-
-  const handleGoogleLoginSuccess = async (accessToken: string) => {
-    setIsGoogleLoading(true);
-    try {
-      const userInfoResponse = await fetch(
-        `https://www.googleapis.com/oauth2/v2/userinfo?access_token=${accessToken}`
-      );
-      const userInfo = await userInfoResponse.json();
-
-      console.log("Google User Info:", userInfo);
-
-      const user: User = {
-        id: userInfo.id,
-        name: userInfo.name,
-        email: userInfo.email,
-        picture: userInfo.picture,
-        provider: "google",
-      };
-
-      await AuthService.saveUser(user);
-      await AuthService.saveToken(accessToken);
-
-      refreshAuthStatus();
-
-      // Optional: Send to backend for validation/registration
-      // try {
-      //   const backendResponse = await ApiService.loginWithGoogle(accessToken, userInfo);
-      //   await AuthService.saveToken(backendResponse.token);
-      // } catch (error) {
-      //   console.error('Backend validation error:', error);
-      // }
-
-      Alert.alert("Login Successful", `Welcome, ${userInfo.name}!`, [
-        {
-          text: "OK",
-          onPress: () => router.replace("/(tabs)"),
-        },
-      ]);
-    } catch (error) {
-      console.error("Error fetching user info:", error);
-      Alert.alert("Error", "Failed to get user information");
-    } finally {
-      setIsGoogleLoading(false);
-    }
-  };
+  }, [response, handleGoogleLoginSuccess]);
 
   const handleGoogleLogin = async () => {
     if (!request) {
@@ -149,30 +138,16 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      console.log("🚀 Starting email login...");
 
-      const user: User = {
-        id: Date.now().toString(), // Demo ID
-        name: email.split("@")[0], // Demo name from email
-        email: email,
-        provider: "email",
-      };
+      const response = await ApiService.loginWithEmail(email, password);
+      console.log("✅ Login API success, saving user and token...");
 
-      await AuthService.saveUser(user);
-      await AuthService.saveToken("demo-jwt-token-" + Date.now());
+      await AuthService.saveUser(response.user);
+      await AuthService.saveToken(response.token);
 
+      console.log("💾 User and token saved, refreshing auth status...");
       refreshAuthStatus();
-
-      // Optional: Use API service to login to backend
-      // try {
-      //   const response = await ApiService.loginWithEmail(email, password);
-      //   await AuthService.saveUser(response.user);
-      //   await AuthService.saveToken(response.token);
-      // } catch (error) {
-      //   console.error('Login API error:', error);
-      //   Alert.alert('Error', 'Email atau password salah');
-      //   return;
-      // }
 
       Alert.alert("Login Successful", "You have successfully logged in!", [
         {
@@ -181,8 +156,11 @@ export default function LoginScreen() {
         },
       ]);
     } catch (error) {
-      console.error("Login error:", error);
-      Alert.alert("Error", "Wrong email or password");
+      console.error("❌ Login error:", error);
+      Alert.alert(
+        "Error",
+        error instanceof Error ? error.message : "Login failed"
+      );
     } finally {
       setIsLoading(false);
     }
@@ -221,7 +199,6 @@ export default function LoginScreen() {
             </Text>
           </View>
 
-          {/* User Profile Section */}
           <View style={styles.profileSection}>
             <View style={styles.profileHeader}>
               {user.picture ? (
@@ -238,14 +215,13 @@ export default function LoginScreen() {
                 <Text style={styles.userEmail}>{user.email}</Text>
                 <View style={styles.providerBadge}>
                   <Text style={styles.providerText}>
-                    {user.provider === "google" ? "🔗 Google" : "📧 Email"}
+                    {user.provider === "google" ? "Google" : "Email"}
                   </Text>
                 </View>
               </View>
             </View>
           </View>
 
-          {/* Settings Options */}
           <View style={styles.settingsSection}>
             <TouchableOpacity style={styles.settingItem}>
               <View style={styles.settingIcon}>

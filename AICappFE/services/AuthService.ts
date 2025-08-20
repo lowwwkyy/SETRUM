@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
 export interface User {
   id: string;
@@ -57,11 +58,25 @@ export class AuthService {
 
   static async isLoggedIn(): Promise<boolean> {
     try {
+      console.log("🔐 Checking if user is logged in...");
+
       const user = await this.getUser();
       const token = await this.getToken();
-      return !!(user && token);
+
+      console.log(
+        "👤 User data:",
+        user
+          ? { id: user.id, email: user.email, provider: user.provider }
+          : "null"
+      );
+      console.log("🎫 Token:", token ? "exists" : "null");
+
+      const isLoggedIn = !!(user && token);
+      console.log("✅ IsLoggedIn result:", isLoggedIn);
+
+      return isLoggedIn;
     } catch (error) {
-      console.error("Error checking login status:", error);
+      console.error("❌ Error checking login status:", error);
       return false;
     }
   }
@@ -69,30 +84,53 @@ export class AuthService {
 
 // API Service untuk backend communication
 export class ApiService {
-  static readonly BASE_URL = "https://your-backend-api.com"; // Ganti dengan URL backend Anda
+  // Fungsi untuk mendapatkan BASE_URL yang tepat untuk Expo
+  private static getBaseUrl(): string {
+    if (__DEV__) {
+      // Untuk development dengan Expo
+      if (Platform.OS === "web") {
+        // Web (Expo Web) - bisa gunakan localhost
+        return "http://localhost:3000";
+      } else {
+        // Mobile (iOS/Android) dengan Expo - menggunakan ngrok
+        return "https://0c50c26226de.ngrok-free.app";
+      }
+    } else {
+      // Production - URL production yang sama
+      return "https://0c50c26226de.ngrok-free.app";
+    }
+  }
+  static readonly BASE_URL = ApiService.getBaseUrl();
 
   static async loginWithGoogle(
-    accessToken: string,
-    userInfo: any
+    idToken: string
   ): Promise<{ user: User; token: string }> {
     try {
-      const response = await fetch(`${this.BASE_URL}/auth/google`, {
+      const response = await fetch(`${this.BASE_URL}/auth/google/signin`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          accessToken,
-          userInfo,
+          idToken,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Login failed");
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Login failed");
       }
 
       const data = await response.json();
-      return data;
+      return {
+        user: {
+          id: data.user.id,
+          name: data.user.displayName,
+          email: data.user.email,
+          provider: "google",
+        },
+        token: data.token,
+      };
     } catch (error) {
       console.error("Google login API error:", error);
       throw error;
@@ -104,6 +142,9 @@ export class ApiService {
     password: string
   ): Promise<{ user: User; token: string }> {
     try {
+      console.log("🚀 Attempting login to:", this.BASE_URL);
+      console.log("📧 Email:", email);
+
       const response = await fetch(`${this.BASE_URL}/auth/login`, {
         method: "POST",
         headers: {
@@ -115,14 +156,62 @@ export class ApiService {
         }),
       });
 
+      console.log("📡 Response status:", response.status);
+
       if (!response.ok) {
-        throw new Error("Login failed");
+        const errorData = await response.json();
+        console.log("❌ Error response:", errorData);
+        throw new Error(errorData.message || "Login failed");
+      }
+
+      const data = await response.json();
+      console.log("✅ Login successful:", {
+        userId: data.userId,
+        displayName: data.displayName,
+      });
+
+      return {
+        user: {
+          id: data.userId,
+          name: data.displayName,
+          email: email,
+          provider: "email",
+        },
+        token: data.token,
+      };
+    } catch (error) {
+      console.error("Email login API error:", error);
+      throw error;
+    }
+  }
+
+  static async registerWithEmail(
+    email: string,
+    password: string,
+    displayName: string
+  ): Promise<{ message: string }> {
+    try {
+      const response = await fetch(`${this.BASE_URL}/auth/signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          displayName,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Registration failed");
       }
 
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error("Email login API error:", error);
+      console.error("Registration API error:", error);
       throw error;
     }
   }
