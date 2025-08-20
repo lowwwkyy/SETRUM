@@ -1,5 +1,7 @@
 import { DATA_1M, DATA_1W, DATA_3M } from "@/components/Utils/data";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { AuthenticatedWrapper } from "@/components/AuthenticatedWrapper";
+import { useBudgetValidation } from "@/hooks/useBudgetValidation";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORMODES } from "@gluestack-style/react/lib/typescript/types";
 import { Box } from "@gluestack-ui/themed";
@@ -10,7 +12,13 @@ import {
   useFont,
   vec,
 } from "@shopify/react-native-skia";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   FlatList,
   ScrollView,
@@ -21,6 +29,7 @@ import {
 } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
 import { useDerivedValue, type SharedValue } from "react-native-reanimated";
+import { router } from "expo-router";
 import {
   Area,
   CartesianChart,
@@ -37,17 +46,41 @@ export default function AppPage() {
   const font = useFont(inter, 12);
   const chartFont = useFont(interBold, 30);
 
-  // Get the latest value from the initial data
-  const getLatestValue = (data: typeof DATA_1M) => {
-    return data.length > 0 ? data[data.length - 1].highTmp : 0;
-  };
+  const { hasBudget, isLoading: budgetLoading } = useBudgetValidation();
+
+  const EMPTY_DATA = useMemo(
+    () => [
+      { day: 1, highTmp: 0 },
+      { day: 2, highTmp: 0 },
+      { day: 3, highTmp: 0 },
+      { day: 4, highTmp: 0 },
+      { day: 5, highTmp: 0 },
+    ],
+    []
+  );
+
+  const getChartDataBasedOnBudget = useCallback(
+    (timeFrame: "1W" | "1M" | "3M") => {
+      if (!hasBudget && !budgetLoading) {
+        return EMPTY_DATA;
+      }
+
+      const timeFrameData = {
+        "1W": DATA_1W,
+        "1M": DATA_1M,
+        "3M": DATA_3M,
+      };
+      return timeFrameData[timeFrame];
+    },
+    [hasBudget, budgetLoading, EMPTY_DATA]
+  );
 
   const { state, isActive } = useChartPressState({
-    x: DATA_1M.length - 1, // Set to last index
-    y: { highTmp: getLatestValue(DATA_1M) }, // Set to latest value
+    x: EMPTY_DATA.length - 1,
+    y: { highTmp: 0 },
   });
   const colorMode = useColorScheme() as COLORMODES;
-  const [chartData, setChartData] = useState(DATA_1M);
+  const [chartData, setChartData] = useState(EMPTY_DATA);
   const [selectedTimeFrame, setSelectedTimeFrame] = useState<
     "1W" | "1M" | "3M"
   >("1M");
@@ -56,20 +89,22 @@ export default function AppPage() {
   const chartRef = useRef<CartesianActionsHandle<typeof state>>(null);
   const sliderRef = useRef<FlatList>(null);
 
-  // Update state when chartData changes to show latest value
+  useEffect(() => {
+    const newData = getChartDataBasedOnBudget(selectedTimeFrame);
+    setChartData(newData);
+  }, [hasBudget, budgetLoading, selectedTimeFrame, getChartDataBasedOnBudget]);
+
   useEffect(() => {
     if (chartData.length > 0) {
       const latestValue = chartData[chartData.length - 1].highTmp;
       const latestIndex = chartData.length - 1;
 
-      // Update the state values and reset tooltip
       state.x.value.value = latestIndex;
       state.y.highTmp.value.value = latestValue;
-      state.isActive.value = false; // Reset tooltip setiap kali data berubah
+      state.isActive.value = false;
     }
   }, [chartData, state.x.value, state.y.highTmp.value, state.isActive]);
 
-  // Custom tap gesture for instant selection
   const tapGesture = Gesture.Tap().onStart((e) => {
     state.isActive.value = true;
     chartRef.current?.handleTouch(state, e.x, e.y);
@@ -78,118 +113,150 @@ export default function AppPage() {
   const composedGesture = Gesture.Race(tapGesture);
 
   const value = useDerivedValue(() => {
-    // Jika chart sedang tidak aktif (tidak ada interaksi), tampilkan nilai terakhir
+    if (!hasBudget && !budgetLoading) {
+      return "No Data Available";
+    }
+
     if (!state.isActive.value) {
       const latestValue =
         chartData.length > 0 ? chartData[chartData.length - 1].highTmp : 0;
       return latestValue.toFixed(2) + " kWh";
     }
-    // Jika chart aktif (ada interaksi), tampilkan nilai yang dipilih
     return state.y.highTmp.value.value.toFixed(2) + " kWh";
-  }, [state, chartData]);
+  }, [state, chartData, hasBudget, budgetLoading]);
 
-  // Callback untuk handling perubahan timeframe
   const handleTimeFrameChange = (timeFrame: "1W" | "1M" | "3M") => {
-    const timeFrameData = {
-      "1W": DATA_1W,
-      "1M": DATA_1M,
-      "3M": DATA_3M,
-    };
-
-    const newData = timeFrameData[timeFrame];
-    setChartData(newData);
     setSelectedTimeFrame(timeFrame);
+    const newData = getChartDataBasedOnBudget(timeFrame);
+    setChartData(newData);
 
     if (newData.length > 0) {
       const latestValue = newData[newData.length - 1].highTmp;
       const latestIndex = newData.length - 1;
 
-      // Reset tooltip dan set state ke nilai terakhir
       setTimeout(() => {
         state.x.value.value = latestIndex;
         state.y.highTmp.value.value = latestValue;
-        state.isActive.value = false; // Reset tooltip (sembunyikan)
-      }, 100); // Small delay to ensure chart is updated
+        state.isActive.value = false;
+      }, 100);
     }
   };
 
   const labelColor = colorMode === "dark" ? "black" : "white";
   const lineColor = colorMode === "dark" ? "gray" : "white";
 
-  // Generate device-specific chart data
-  const generateDeviceData = (
-    deviceName: string,
-    timeFrame: "1W" | "1M" | "3M"
-  ) => {
-    const baseData = {
-      "1W": DATA_1W,
-      "1M": DATA_1M,
-      "3M": DATA_3M,
-    }[timeFrame];
-
-    // Device multipliers to create realistic individual device patterns
-    // Base data shows ~150kWh daily average, so ~1050kWh weekly
-    // To get target 100kWh weekly total, we need much smaller multipliers
-    // Target: AC=35kWh, Heater=25kWh, Refrigerator=25kWh, Lighting=15kWh (100kWh total)
-    const deviceMultipliers: { [key: string]: number } = {
-      "Air Conditioner": 0.33, // 35kWh ÷ 1050kWh ≈ 0.33%
-      Heater: 0.24, // 25kWh ÷ 1050kWh ≈ 0.24%
-      Refrigerator: 0.24, // 25kWh ÷ 1050kWh ≈ 0.24%
-      Lighting: 0.14, // 15kWh ÷ 1050kWh ≈ 0.14%
-      "Washing Machine": 0.18, // 18kWh ÷ 1050kWh ≈ 0.18%
-      TV: 0.12, // 12kWh ÷ 1050kWh ≈ 0.12%
-      Microwave: 0.08, // 8kWh ÷ 1050kWh ≈ 0.08%
-      Computer: 0.15, // 15kWh ÷ 1050kWh ≈ 0.15%
-    };
-
-    const multiplier = deviceMultipliers[deviceName] || 0.25;
-
-    return baseData.map((item, index) => ({
-      ...item,
-      highTmp: Math.round(item.highTmp * multiplier * 100) / 100, // Round to 2 decimal places
-    }));
-  };
-
-  // Update chart data when device or timeframe changes
-  useEffect(() => {
-    const getCurrentChartData = () => {
-      if (selectedDevice) {
-        return generateDeviceData(selectedDevice, selectedTimeFrame);
+  const generateDeviceData = useCallback(
+    (deviceName: string, timeFrame: "1W" | "1M" | "3M") => {
+      // Return empty data if budget not set
+      if (!hasBudget && !budgetLoading) {
+        return EMPTY_DATA;
       }
-      // Return total consumption data when no device is selected
-      const timeFrameData = {
+
+      const baseData = {
         "1W": DATA_1W,
         "1M": DATA_1M,
         "3M": DATA_3M,
+      }[timeFrame];
+
+      const deviceMultipliers: { [key: string]: number } = {
+        "Air Conditioner": 0.33,
+        Heater: 0.24,
+        Refrigerator: 0.24,
+        Lighting: 0.14,
+        "Washing Machine": 0.18,
+        TV: 0.12,
+        Microwave: 0.08,
+        Computer: 0.15,
       };
-      return timeFrameData[selectedTimeFrame];
+
+      const multiplier = deviceMultipliers[deviceName] || 0.25;
+
+      return baseData.map((item, index) => ({
+        ...item,
+        highTmp: Math.round(item.highTmp * multiplier * 100) / 100,
+      }));
+    },
+    [hasBudget, budgetLoading, EMPTY_DATA]
+  );
+
+  useEffect(() => {
+    const getCurrentChartData = () => {
+      if (!hasBudget && !budgetLoading) {
+        return EMPTY_DATA;
+      }
+
+      if (selectedDevice) {
+        return generateDeviceData(selectedDevice, selectedTimeFrame);
+      }
+      return getChartDataBasedOnBudget(selectedTimeFrame);
     };
 
     const newData = getCurrentChartData();
     setChartData(newData);
-  }, [selectedDevice, selectedTimeFrame]);
+  }, [
+    selectedDevice,
+    selectedTimeFrame,
+    generateDeviceData,
+    hasBudget,
+    budgetLoading,
+    EMPTY_DATA,
+    getChartDataBasedOnBudget,
+  ]);
 
-  // Handle device selection
   const handleDevicePress = (deviceName: string) => {
     if (selectedDevice === deviceName) {
-      // If clicking the same device, deselect it (show total consumption)
       setSelectedDevice(null);
     } else {
-      // Select the new device
       setSelectedDevice(deviceName);
     }
   };
 
-  // Get current devices data based on selected timeframe
   const devicesData = useMemo(() => {
-    // Dynamic devices data based on timeframe
     const getDevicesData = (timeFrame: "1W" | "1M" | "3M") => {
-      // Calculate total consumption for each device in the selected timeframe
+      if (!hasBudget && !budgetLoading) {
+        return [
+          {
+            name: "Air Conditioner",
+            consumption: "No Data Available",
+            icon: "snow" as const,
+          },
+          {
+            name: "Heater",
+            consumption: "No Data Available",
+            icon: "flame" as const,
+          },
+          {
+            name: "Refrigerator",
+            consumption: "No Data Available",
+            icon: "thermometer" as const,
+          },
+          {
+            name: "Lighting",
+            consumption: "No Data Available",
+            icon: "bulb" as const,
+          },
+          {
+            name: "Washing Machine",
+            consumption: "No Data Available",
+            icon: "water" as const,
+          },
+          { name: "TV", consumption: "No Data Available", icon: "tv" as const },
+          {
+            name: "Microwave",
+            consumption: "No Data Available",
+            icon: "restaurant" as const,
+          },
+          {
+            name: "Computer",
+            consumption: "No Data Available",
+            icon: "desktop" as const,
+          },
+        ];
+      }
+
       const getDeviceTotalConsumption = (deviceName: string) => {
-        // Generate device-specific data for the timeframe
         const deviceData = generateDeviceData(deviceName, timeFrame);
 
-        // Calculate total consumption by summing all data points in the timeframe
         const totalConsumption = deviceData.reduce(
           (sum, item) => sum + item.highTmp,
           0
@@ -259,9 +326,8 @@ export default function AppPage() {
     };
 
     return getDevicesData(selectedTimeFrame);
-  }, [selectedTimeFrame]);
+  }, [selectedTimeFrame, hasBudget, budgetLoading, generateDeviceData]);
 
-  // Utility function to chunk array into groups of specified size
   const chunkArray = <T,>(array: T[], size: number): T[][] => {
     const result: T[][] = [];
     for (let i = 0; i < array.length; i += size) {
@@ -270,218 +336,240 @@ export default function AppPage() {
     return result;
   };
 
-  // Split devices into pages of maximum 6 devices each
   const devicePages = chunkArray(devicesData, 6);
 
   return (
-    <ScrollView
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.scrollContent}
-    >
-      <Text style={styles.title}>
-        {selectedDevice
-          ? `${selectedDevice} - Energy Usage`
-          : "Energy Dashboard"}
-      </Text>
-
-      <Box
-        width="100%"
-        $dark-bg="$black"
-        $light-bg="$white"
-        alignItems="center"
-        paddingHorizontal={5}
-        paddingVertical={30}
+    <AuthenticatedWrapper showBudgetValidation={false}>
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
       >
-        <Box paddingTop={7} width="95%" height={350}>
-          <CartesianChart
-            data={chartData}
-            xKey="day"
-            yKeys={["highTmp"]}
-            domainPadding={{ top: 80 }}
-            axisOptions={{
-              font,
-              labelColor,
-              lineColor,
-            }}
-            chartPressState={state}
-            customGestures={composedGesture}
-            actionsRef={chartRef}
-          >
-            {({
-              points,
-              chartBounds,
-            }: CartesianChartRenderArg<
-              { day: number; highTmp: number },
-              "highTmp"
-            >) => (
-              <>
-                <SKText
-                  x={chartBounds.left + 15}
-                  y={35}
-                  font={chartFont}
-                  text={value}
-                  color={labelColor}
-                  style={"fill"}
-                />
-                <Line
-                  points={points.highTmp}
-                  color="lightgreen"
-                  strokeWidth={3}
-                  animate={{ type: "timing", duration: 500 }}
-                />
-                <Area
-                  points={points.highTmp}
-                  y0={chartBounds.bottom}
-                  animate={{ type: "timing", duration: 500 }}
-                >
-                  <LinearGradient
-                    start={vec(chartBounds.bottom, 200)}
-                    end={vec(chartBounds.bottom, chartBounds.bottom)}
-                    colors={["green", "#90ee9050"]}
+        <Text style={styles.title}>
+          {selectedDevice
+            ? `${selectedDevice} - Energy Usage`
+            : "Energy Dashboard"}
+        </Text>
+
+        {!hasBudget && !budgetLoading && (
+          <View style={styles.noBudgetMessage}>
+            <Text style={styles.noBudgetText}>
+              📊 Set your monthly budget to view energy data and insights
+            </Text>
+            <TouchableOpacity
+              style={styles.setBudgetButton}
+              onPress={() => {
+                router.push("/(tabs)/details");
+              }}
+            >
+              <Text style={styles.setBudgetButtonText}>Set Budget</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <Box
+          width="100%"
+          $dark-bg="$black"
+          $light-bg="$white"
+          alignItems="center"
+          paddingHorizontal={5}
+          paddingVertical={30}
+        >
+          <Box paddingTop={7} width="98%" height={450}>
+            <CartesianChart
+              data={chartData}
+              xKey="day"
+              yKeys={["highTmp"]}
+              domainPadding={{ top: 100 }}
+              axisOptions={{
+                font,
+                labelColor,
+                lineColor,
+              }}
+              chartPressState={state}
+              customGestures={composedGesture}
+              actionsRef={chartRef}
+            >
+              {({
+                points,
+                chartBounds,
+              }: CartesianChartRenderArg<
+                { day: number; highTmp: number },
+                "highTmp"
+              >) => (
+                <>
+                  <SKText
+                    x={chartBounds.left + 15}
+                    y={35}
+                    font={chartFont}
+                    text={value}
+                    color={labelColor}
+                    style={"fill"}
                   />
-                </Area>
+                  <Line
+                    points={points.highTmp}
+                    color="lightgreen"
+                    strokeWidth={3}
+                    animate={{ type: "timing", duration: 500 }}
+                  />
+                  <Area
+                    points={points.highTmp}
+                    y0={chartBounds.bottom}
+                    animate={{ type: "timing", duration: 500 }}
+                  >
+                    <LinearGradient
+                      start={vec(chartBounds.bottom, 200)}
+                      end={vec(chartBounds.bottom, chartBounds.bottom)}
+                      colors={["green", "#90ee9050"]}
+                    />
+                  </Area>
 
-                {isActive ? (
-                  <ToolTip x={state.x.position} y={state.y.highTmp.position} />
-                ) : null}
-              </>
-            )}
-          </CartesianChart>
-        </Box>
+                  {isActive ? (
+                    <ToolTip
+                      x={state.x.position}
+                      y={state.y.highTmp.position}
+                    />
+                  ) : null}
+                </>
+              )}
+            </CartesianChart>
+          </Box>
 
-        {/* Custom Bottom Section with Time Frame Buttons and Devices */}
-        <Box marginTop={5} paddingTop={10} width="95%" justifyContent="center">
-          {/* Time Frame Buttons */}
-          <View style={styles.timeFrameContainer}>
-            {(["1W", "1M", "3M"] as const).map((timeFrame) => (
-              <TouchableOpacity
-                key={timeFrame}
-                onPress={() => handleTimeFrameChange(timeFrame)}
-                style={[
-                  styles.timeFrameButton,
-                  selectedTimeFrame === timeFrame
-                    ? styles.activeTimeFrame
-                    : styles.inactiveTimeFrame,
-                ]}
-              >
-                <Text
+          <Box
+            marginTop={5}
+            paddingTop={10}
+            width="95%"
+            justifyContent="center"
+          >
+            <View style={styles.timeFrameContainer}>
+              {(["1W", "1M", "3M"] as const).map((timeFrame) => (
+                <TouchableOpacity
+                  key={timeFrame}
+                  onPress={() => handleTimeFrameChange(timeFrame)}
                   style={[
-                    styles.timeFrameText,
+                    styles.timeFrameButton,
                     selectedTimeFrame === timeFrame
-                      ? styles.activeTimeFrameText
-                      : styles.inactiveTimeFrameText,
+                      ? styles.activeTimeFrame
+                      : styles.inactiveTimeFrame,
                   ]}
                 >
-                  {timeFrame === "1W"
-                    ? "1 Week"
-                    : timeFrame === "1M"
-                    ? "1 Month"
-                    : "3 Months"}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+                  <Text
+                    style={[
+                      styles.timeFrameText,
+                      selectedTimeFrame === timeFrame
+                        ? styles.activeTimeFrameText
+                        : styles.inactiveTimeFrameText,
+                    ]}
+                  >
+                    {timeFrame === "1W"
+                      ? "1 Week"
+                      : timeFrame === "1M"
+                      ? "1 Month"
+                      : "3 Months"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-          {/* Devices Section */}
-          <View style={styles.devicesSection}>
-            <Text style={styles.sectionTitle}>
-              {selectedDevice ? `${selectedDevice} Usage` : "Devices"}
-            </Text>
+            <View style={styles.devicesSection}>
+              <Text style={styles.sectionTitle}>
+                {selectedDevice ? `${selectedDevice} Usage` : "Devices"}
+              </Text>
 
-            {/* Devices Slider */}
-            <FlatList
-              ref={sliderRef}
-              data={devicePages}
-              horizontal
-              pagingEnabled
-              keyExtractor={(_, index) => `device-page-${index}`}
-              showsHorizontalScrollIndicator={false}
-              style={styles.deviceSlider}
-              snapToInterval={330}
-              decelerationRate="fast"
-              getItemLayout={(data, index) => ({
-                length: 330,
-                offset: 330 * index,
-                index,
-              })}
-              onScroll={(event) => {
-                const pageIndex = Math.round(
-                  event.nativeEvent.contentOffset.x / 330
-                );
-                setCurrentSliderPage(pageIndex);
-              }}
-              scrollEventThrottle={16}
-              renderItem={({ item: pageDevices }) => (
-                <View style={styles.devicesGrid}>
-                  {pageDevices.map((device: any, index: number) => (
+              <FlatList
+                ref={sliderRef}
+                data={devicePages}
+                horizontal
+                pagingEnabled
+                keyExtractor={(_, index) => `device-page-${index}`}
+                showsHorizontalScrollIndicator={false}
+                style={styles.deviceSlider}
+                snapToInterval={330}
+                decelerationRate="fast"
+                getItemLayout={(data, index) => ({
+                  length: 330,
+                  offset: 330 * index,
+                  index,
+                })}
+                onScroll={(event) => {
+                  const pageIndex = Math.round(
+                    event.nativeEvent.contentOffset.x / 330
+                  );
+                  setCurrentSliderPage(pageIndex);
+                }}
+                scrollEventThrottle={16}
+                renderItem={({ item: pageDevices }) => (
+                  <View style={styles.devicesGrid}>
+                    {pageDevices.map((device: any, index: number) => (
+                      <TouchableOpacity
+                        key={device.name}
+                        onPress={() => handleDevicePress(device.name)}
+                        style={[
+                          styles.deviceCard,
+                          selectedDevice === device.name &&
+                            styles.selectedDeviceCard,
+                        ]}
+                      >
+                        <View style={styles.deviceIconContainer}>
+                          <Ionicons
+                            name={device.icon}
+                            size={24}
+                            color={
+                              selectedDevice === device.name
+                                ? "#4285F4"
+                                : "black"
+                            }
+                          />
+                        </View>
+                        <Text
+                          style={[
+                            styles.deviceName,
+                            selectedDevice === device.name &&
+                              styles.selectedDeviceName,
+                          ]}
+                        >
+                          {device.name}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.deviceConsumption,
+                            selectedDevice === device.name &&
+                              styles.selectedDeviceConsumption,
+                          ]}
+                        >
+                          {device.consumption}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              />
+
+              {devicePages.length > 1 && (
+                <View style={styles.sliderDotsContainer}>
+                  {devicePages.map((_, index) => (
                     <TouchableOpacity
-                      key={device.name}
-                      onPress={() => handleDevicePress(device.name)}
+                      key={index}
                       style={[
-                        styles.deviceCard,
-                        selectedDevice === device.name &&
-                          styles.selectedDeviceCard,
+                        styles.sliderDot,
+                        currentSliderPage === index && styles.activeDot,
                       ]}
-                    >
-                      <View style={styles.deviceIconContainer}>
-                        <Ionicons
-                          name={device.icon}
-                          size={24}
-                          color={
-                            selectedDevice === device.name ? "#4285F4" : "black"
-                          }
-                        />
-                      </View>
-                      <Text
-                        style={[
-                          styles.deviceName,
-                          selectedDevice === device.name &&
-                            styles.selectedDeviceName,
-                        ]}
-                      >
-                        {device.name}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.deviceConsumption,
-                          selectedDevice === device.name &&
-                            styles.selectedDeviceConsumption,
-                        ]}
-                      >
-                        {device.consumption}
-                      </Text>
-                    </TouchableOpacity>
+                      onPress={() => {
+                        setCurrentSliderPage(index);
+                        sliderRef.current?.scrollToOffset({
+                          offset: index * 330,
+                          animated: true,
+                        });
+                      }}
+                    />
                   ))}
                 </View>
               )}
-            />
-
-            {/* Slider Dots Indicator */}
-            {devicePages.length > 1 && (
-              <View style={styles.sliderDotsContainer}>
-                {devicePages.map((_, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.sliderDot,
-                      currentSliderPage === index && styles.activeDot,
-                    ]}
-                    onPress={() => {
-                      setCurrentSliderPage(index);
-                      sliderRef.current?.scrollToOffset({
-                        offset: index * 330,
-                        animated: true,
-                      });
-                    }}
-                  />
-                ))}
-              </View>
-            )}
-          </View>
+            </View>
+          </Box>
         </Box>
-      </Box>
-    </ScrollView>
+      </ScrollView>
+    </AuthenticatedWrapper>
   );
 }
 function ToolTip({ x, y }: { x: SharedValue<number>; y: SharedValue<number> }) {
@@ -497,7 +585,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 50, // Extra bottom padding for complete scroll
+    paddingBottom: 50,
   },
   backButton: {
     marginBottom: 16,
@@ -548,7 +636,7 @@ const styles = StyleSheet.create({
     color: "black",
   },
   devicesSection: {
-    marginBottom: 40, // Increased bottom margin
+    marginBottom: 40,
     paddingHorizontal: 5,
   },
   sectionTitle: {
@@ -558,15 +646,15 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   deviceSlider: {
-    height: 450, // Increased height for slider to prevent cut-off
+    height: 450,
   },
   devicesGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    width: 330, // Adjusted width for each page
+    width: 330,
     paddingHorizontal: 10,
-    minHeight: 260, // Minimum height to prevent content cut-off
+    minHeight: 260,
   },
   deviceCard: {
     width: "48%",
@@ -587,7 +675,6 @@ const styles = StyleSheet.create({
   deviceIconContainer: {
     width: 50,
     height: 50,
-    // backgroundColor: "grey",
     borderRadius: 25,
     justifyContent: "center",
     alignItems: "center",
@@ -617,7 +704,6 @@ const styles = StyleSheet.create({
   selectedDeviceConsumption: {
     color: "#4285F4",
   },
-  // Slider Dots Styles
   sliderDotsContainer: {
     flexDirection: "row",
     justifyContent: "center",
@@ -637,5 +723,33 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
+  },
+  noBudgetMessage: {
+    backgroundColor: "#fff3cd",
+    borderColor: "#ffa000",
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 16,
+    marginVertical: 16,
+    marginHorizontal: 10,
+    alignItems: "center",
+  },
+  noBudgetText: {
+    fontSize: 16,
+    color: "#856404",
+    textAlign: "center",
+    marginBottom: 12,
+    fontWeight: "500",
+  },
+  setBudgetButton: {
+    backgroundColor: "#4285F4",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 6,
+  },
+  setBudgetButtonText: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
