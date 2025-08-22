@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Box } from "@gluestack-ui/themed";
 import { useFont } from "@shopify/react-native-skia";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   Alert,
   SafeAreaView,
@@ -19,23 +20,196 @@ import {
   type CartesianChartRenderArg,
 } from "victory-native";
 import { BudgetService } from "@/services/BudgetService";
+import { ElectricityUsageService } from "@/services/ElectricityUsageService";
 
 const inter = require("@/assets/fonts/Roboto-Regular.ttf");
 
 export default function DetailsScreen() {
   const font = useFont(inter, 12);
 
-  // Budget validation from API
   const [monthlyBudget, setMonthlyBudget] = useState(0);
   const [budgetId, setBudgetId] = useState<string | null>(null);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [budgetInput, setBudgetInput] = useState("0");
   const [loadingBudget, setLoadingBudget] = useState(true);
+  const [chartData, setChartData] = useState<
+    { day: number; value: number; type: string; date: string }[]
+  >([]);
+  const [selectedTimeFrame, setSelectedTimeFrame] = useState<
+    "1W" | "1M" | "3M"
+  >("1M");
+  const [loadingChart, setLoadingChart] = useState(true);
+  const [totalConsumption, setTotalConsumption] = useState(0);
 
-  // Load budget from API on component mount
+  // Load chart data from real device consumption
+  const loadChartData = useCallback(async () => {
+    try {
+      setLoadingChart(true);
+      console.log("📊 Loading chart data for timeframe:", selectedTimeFrame);
+
+      const chartDataResult =
+        await ElectricityUsageService.getChartDataByTimeFrame(
+          selectedTimeFrame
+        );
+
+      console.log("📊 Chart data result:", chartDataResult);
+
+      // Convert to format expected by chart
+      const formattedData = chartDataResult.map((item, index) => ({
+        day: item.day,
+        value: parseFloat(item.highTmp.toFixed(3)), // highTmp contains the consumption value
+        type: "Consumption",
+        date: `Day ${item.day}`,
+      }));
+
+      setChartData(formattedData);
+
+      // Calculate total consumption based on selected timeframe
+      const total = chartDataResult.reduce(
+        (sum, item) => sum + item.highTmp,
+        0
+      );
+
+      console.log(
+        "📊 Total consumption calculated for",
+        selectedTimeFrame,
+        ":",
+        total
+      );
+      setTotalConsumption(total);
+
+      console.log("📊 Chart data formatted:", formattedData.length, "points");
+      console.log("📊 Sample chart data:", formattedData.slice(0, 3));
+
+      // If no real data, try to get data from all devices directly with timeframe filter
+      if (total === 0) {
+        console.log(
+          "📊 No chart data, trying to get device consumption for timeframe:",
+          selectedTimeFrame
+        );
+        try {
+          // Calculate date range based on timeframe
+          const endDate = new Date();
+          let startDate = new Date();
+
+          switch (selectedTimeFrame) {
+            case "1W":
+              startDate.setDate(endDate.getDate() - 7);
+              break;
+            case "1M":
+              startDate.setMonth(endDate.getMonth() - 1);
+              break;
+            case "3M":
+              startDate.setMonth(endDate.getMonth() - 3);
+              break;
+          }
+
+          console.log("📊 Date range for", selectedTimeFrame, ":", {
+            startDate,
+            endDate,
+          });
+
+          // Get usage data filtered by date range
+          const filteredUsage = await ElectricityUsageService.getFilteredUsage(
+            undefined, // all devices
+            startDate,
+            endDate
+          );
+
+          console.log(
+            "📊 Filtered usage for",
+            selectedTimeFrame,
+            ":",
+            filteredUsage.length,
+            "records"
+          );
+
+          let totalFromDevices = 0;
+          let chartDataFromDevices: any[] = [];
+
+          // Calculate total from filtered usage
+          filteredUsage.forEach((usage) => {
+            totalFromDevices += usage.dailyKwh || 0;
+          });
+
+          console.log(
+            "📊 Total from devices for",
+            selectedTimeFrame,
+            ":",
+            totalFromDevices,
+            "kWh"
+          );
+
+          if (totalFromDevices > 0) {
+            setTotalConsumption(totalFromDevices);
+
+            // Group usage by date for chart with proper day count
+            const daysCount =
+              selectedTimeFrame === "1W"
+                ? 7
+                : selectedTimeFrame === "1M"
+                ? 30
+                : 90;
+            const dailyUsage = new Map<string, number>();
+
+            filteredUsage.forEach((usage) => {
+              const date = new Date(usage.date).toISOString().split("T")[0];
+              const currentTotal = dailyUsage.get(date) || 0;
+              dailyUsage.set(date, currentTotal + (usage.dailyKwh || 0));
+            });
+
+            // Create chart data with fixed number of days
+            chartDataFromDevices = [];
+            for (let i = 1; i <= daysCount; i++) {
+              chartDataFromDevices.push({
+                day: i,
+                value: 0,
+                type: "Consumption",
+                date: `Day ${i}`,
+              });
+            }
+
+            // Fill in actual data where available
+            const sortedDates = Array.from(dailyUsage.keys()).sort();
+            sortedDates.forEach((date, index) => {
+              if (index < daysCount) {
+                chartDataFromDevices[index] = {
+                  day: index + 1,
+                  value: dailyUsage.get(date) || 0,
+                  type: "Consumption",
+                  date: new Date(date).toLocaleDateString(),
+                };
+              }
+            });
+
+            setChartData(chartDataFromDevices);
+          }
+        } catch (deviceError) {
+          console.error("📊 Error getting device data:", deviceError);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading chart data:", error);
+      // Fallback to empty data
+      setChartData([]);
+      setTotalConsumption(0);
+    } finally {
+      setLoadingChart(false);
+    }
+  }, [selectedTimeFrame]);
+
   useEffect(() => {
     loadUserBudget();
-  }, []);
+    loadChartData();
+  }, [loadChartData]);
+
+  // Refresh data when tab is focused
+  useFocusEffect(
+    useCallback(() => {
+      console.log("📊 Details tab focused, refreshing data");
+      loadChartData();
+    }, [loadChartData])
+  );
 
   const loadUserBudget = async () => {
     try {
@@ -65,69 +239,69 @@ export default function DetailsScreen() {
   }, [isEditModalVisible]);
 
   const budgetForecastData = useMemo(() => {
-    // Return empty data if no budget is set
-    if (monthlyBudget === 0 || !monthlyBudget) {
-      return [
-        { day: 1, value: 0, type: "actual", date: "Aug-01" },
-        { day: 2, value: 0, type: "actual", date: "Aug-02" },
-        { day: 3, value: 0, type: "actual", date: "Aug-03" },
-        { day: 4, value: 0, type: "actual", date: "Aug-04" },
-        { day: 5, value: 0, type: "actual", date: "Aug-05" },
-      ];
+    const daysCount =
+      selectedTimeFrame === "1W" ? 7 : selectedTimeFrame === "1M" ? 30 : 90;
+
+    if (loadingChart || chartData.length === 0) {
+      // Create loading data with correct number of days
+      const loadingData = [];
+      for (let i = 1; i <= daysCount; i++) {
+        loadingData.push({
+          day: i,
+          value: 0,
+          type: "actual",
+          date: "Loading...",
+        });
+      }
+      return loadingData;
     }
 
-    return [
-      { day: 1, value: 50, type: "actual", date: "Aug-01" },
-      { day: 2, value: 95, type: "actual", date: "Aug-02" },
-      { day: 3, value: 145, type: "actual", date: "Aug-03" },
-      { day: 4, value: 200, type: "actual", date: "Aug-04" },
-      { day: 5, value: 260, type: "actual", date: "Aug-05" },
-      { day: 6, value: 320, type: "actual", date: "Aug-06" },
-      { day: 7, value: 385, type: "actual", date: "Aug-07" },
-      { day: 8, value: 450, type: "actual", date: "Aug-08" },
-      { day: 9, value: 520, type: "actual", date: "Aug-09" },
-      { day: 10, value: 590, type: "actual", date: "Aug-10" },
-      { day: 11, value: 665, type: "actual", date: "Aug-11" },
-      { day: 12, value: 740, type: "actual", date: "Aug-12" },
-      { day: 13, value: 820, type: "actual", date: "Aug-13" },
-      { day: 14, value: 900, type: "actual", date: "Aug-14" },
-      { day: 15, value: 980, type: "actual", date: "Aug-15" },
-      { day: 16, value: 1070, type: "actual", date: "Aug-16" },
+    // Ensure we have the correct number of data points for the timeframe
+    const processedData = [];
+    for (let i = 1; i <= daysCount; i++) {
+      const existingData = chartData.find((item) => item.day === i);
+      if (existingData) {
+        processedData.push({
+          day: i,
+          value: existingData.value,
+          type: "actual",
+          date: existingData.date,
+        });
+      } else {
+        processedData.push({
+          day: i,
+          value: 0,
+          type: "actual",
+          date: `Day ${i}`,
+        });
+      }
+    }
 
-      // Forecasted usage (blue) - Days 17-21
-      { day: 17, value: 1150, type: "forecast", date: "Aug-17" },
-      { day: 18, value: 1220, type: "forecast", date: "Aug-18" },
-      { day: 19, value: 1290, type: "forecast", date: "Aug-19" },
-      { day: 20, value: 1360, type: "forecast", date: "Aug-20" },
-      { day: 21, value: 1430, type: "forecast", date: "Aug-21" },
+    console.log(
+      `📊 Creating chart data for ${selectedTimeFrame} with ${daysCount} days`
+    );
 
-      // Over budget (red) - Days 22-31
-      { day: 22, value: 1510, type: "overBudget", date: "Aug-22" },
-      { day: 23, value: 1590, type: "overBudget", date: "Aug-23" },
-      { day: 24, value: 1670, type: "overBudget", date: "Aug-24" },
-      { day: 25, value: 1750, type: "overBudget", date: "Aug-25" },
-      { day: 26, value: 1830, type: "overBudget", date: "Aug-26" },
-      { day: 27, value: 1910, type: "overBudget", date: "Aug-27" },
-      { day: 28, value: 1990, type: "overBudget", date: "Aug-28" },
-      { day: 29, value: 2070, type: "overBudget", date: "Aug-29" },
-      { day: 30, value: 2150, type: "overBudget", date: "Aug-30" },
-      { day: 31, value: 2230, type: "overBudget", date: "Aug-31" },
-    ];
-  }, [monthlyBudget]);
+    return processedData;
+  }, [loadingChart, chartData, selectedTimeFrame]);
 
   const { state } = useChartPressState({
     x: budgetForecastData.length - 1,
     y: {
-      value: 2230,
+      value:
+        budgetForecastData.length > 0
+          ? budgetForecastData[budgetForecastData.length - 1].value
+          : 0,
     },
   });
 
-  const spentAmount = monthlyBudget === 0 ? 0 : 1070;
+  // Calculate budget stats using real consumption data
+  const spentAmount = totalConsumption * 1700; // Convert kWh to IDR (1700 per kWh)
   const remainingAmount = monthlyBudget - spentAmount;
   const spentPercentage =
     monthlyBudget === 0 ? 0 : (spentAmount / monthlyBudget) * 100;
 
-  const dailyAverage = monthlyBudget === 0 ? 0 : spentAmount / 16;
+  const dailyAverage =
+    budgetForecastData.length > 0 ? spentAmount / budgetForecastData.length : 0;
   const dailyRecommended = monthlyBudget === 0 ? 0 : monthlyBudget / 30;
 
   const handleEditBudget = () => {
@@ -144,16 +318,21 @@ export default function DetailsScreen() {
     const newBudget = parseInt(cleanInput);
 
     console.log("Parsed budget:", newBudget);
+    console.log("Current monthlyBudget:", monthlyBudget);
+    console.log("Current budgetId:", budgetId);
 
     if (newBudget && newBudget > 0) {
       try {
-        // Save to API
+        console.log("Attempting to save budget...");
         if (monthlyBudget === 0 || !budgetId) {
-          // Create new budget
-          await BudgetService.createBudget(newBudget);
+          console.log("Creating new budget");
+          const result = await BudgetService.createBudget(newBudget);
+          console.log("Create budget result:", result);
+          setBudgetId(result._id);
         } else {
-          // Update existing budget
-          await BudgetService.updateBudget(budgetId, newBudget);
+          console.log("Updating existing budget with ID:", budgetId);
+          const result = await BudgetService.updateBudget(budgetId, newBudget);
+          console.log("Update budget result:", result);
         }
 
         setMonthlyBudget(newBudget);
@@ -164,11 +343,15 @@ export default function DetailsScreen() {
           `Budget has been updated to IDR ${newBudget.toLocaleString("id-ID")}!`
         );
 
-        // Reload budget data
         await loadUserBudget();
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error saving budget:", error);
-        Alert.alert("Error", "Failed to save budget. Please try again.");
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
+        Alert.alert(
+          "Error",
+          `Failed to save budget: ${error.message || "Unknown error"}`
+        );
       }
     } else {
       Alert.alert(
@@ -200,6 +383,59 @@ export default function DetailsScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Budget Overview</Text>
+
+        {/* Time Frame Selector */}
+        <View style={styles.timeFrameContainer}>
+          <Text style={styles.timeFrameLabel}>Chart Period:</Text>
+          <View style={styles.timeFrameButtons}>
+            {(["1W", "1M", "3M"] as const).map((timeFrame) => (
+              <TouchableOpacity
+                key={timeFrame}
+                style={[
+                  styles.timeFrameButton,
+                  selectedTimeFrame === timeFrame &&
+                    styles.timeFrameButtonActive,
+                ]}
+                onPress={() => setSelectedTimeFrame(timeFrame)}
+              >
+                <Text
+                  style={[
+                    styles.timeFrameButtonText,
+                    selectedTimeFrame === timeFrame &&
+                      styles.timeFrameButtonTextActive,
+                  ]}
+                >
+                  {timeFrame}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Total Consumption Display */}
+        <View style={styles.consumptionCard}>
+          <View style={styles.consumptionHeader}>
+            <Ionicons name="flash" size={24} color="#F59E0B" />
+            <Text style={styles.consumptionTitle}>Total Consumption</Text>
+          </View>
+          <View style={styles.consumptionContent}>
+            <Text style={styles.consumptionValue}>
+              {totalConsumption.toFixed(3)} kWh
+            </Text>
+            <Text style={styles.consumptionPeriod}>
+              {selectedTimeFrame === "1W"
+                ? "Last 7 days"
+                : selectedTimeFrame === "1M"
+                ? "Last 30 days"
+                : "Last 90 days"}
+            </Text>
+          </View>
+          {loadingChart && (
+            <View style={styles.loadingOverlay}>
+              <Text style={styles.loadingText}>Loading...</Text>
+            </View>
+          )}
+        </View>
         <Text style={styles.monthLabel}>JULY 2025</Text>
 
         {loadingBudget ? (
@@ -282,11 +518,30 @@ export default function DetailsScreen() {
                   data={budgetForecastData}
                   xKey="day"
                   yKeys={["value"]}
-                  domainPadding={{ top: 30 }}
+                  domain={{
+                    x: [
+                      1,
+                      selectedTimeFrame === "1W"
+                        ? 7
+                        : selectedTimeFrame === "1M"
+                        ? 30
+                        : 90,
+                    ],
+                  }}
+                  domainPadding={{ top: 30, left: 20, right: 20 }}
                   axisOptions={{
                     font,
                     labelColor: "black",
                     lineColor: "#E0E0E0",
+                    tickCount: {
+                      x:
+                        selectedTimeFrame === "1W"
+                          ? 7
+                          : selectedTimeFrame === "1M"
+                          ? 6
+                          : 9,
+                      y: 5,
+                    },
                   }}
                   chartPressState={state}
                 >
@@ -1028,5 +1283,104 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#D97706",
     fontWeight: "600",
+  },
+  // Time Frame Selector Styles
+  timeFrameContainer: {
+    backgroundColor: "white",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2.22,
+    elevation: 3,
+  },
+  timeFrameLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 12,
+  },
+  timeFrameButtons: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  timeFrameButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    alignItems: "center",
+  },
+  timeFrameButtonActive: {
+    backgroundColor: "#3B82F6",
+    borderColor: "#3B82F6",
+  },
+  timeFrameButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  timeFrameButtonTextActive: {
+    color: "white",
+  },
+  // Consumption Card Styles
+  consumptionCard: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+    position: "relative",
+  },
+  consumptionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    gap: 8,
+  },
+  consumptionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  consumptionContent: {
+    alignItems: "center",
+  },
+  consumptionValue: {
+    fontSize: 36,
+    fontWeight: "700",
+    color: "#F59E0B",
+    marginBottom: 4,
+  },
+  consumptionPeriod: {
+    fontSize: 14,
+    color: "#6B7280",
+    fontWeight: "500",
+  },
+  loadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 16,
   },
 });

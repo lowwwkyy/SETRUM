@@ -1,14 +1,11 @@
 import { HapticTab } from "@/components/HapticTab";
 import TabBarBackground from "@/components/ui/TabBarBackground";
-import { useColorScheme } from "@/hooks/useColorScheme";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import React from "react";
 import { Platform } from "react-native";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
       screenOptions={{
@@ -65,16 +62,22 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="login"
+        name="settings"
         options={{
-          title: "Profile",
+          title: "Settings",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               size={28}
-              name={focused ? "person-sharp" : "person-outline"}
+              name={focused ? "settings" : "settings-outline"}
               color={color}
             />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="login"
+        options={{
+          href: null, // Hide from tab bar, only accessible programmatically
         }}
       />
     </Tabs>

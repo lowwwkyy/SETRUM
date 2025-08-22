@@ -33,7 +33,12 @@ export class AuthService {
 
   static async saveToken(token: string): Promise<void> {
     try {
+      console.log(
+        "💾 Saving token to storage:",
+        token.substring(0, 50) + "..."
+      );
       await AsyncStorage.setItem(TOKEN_STORAGE_KEY, token);
+      console.log("✅ Token saved successfully");
     } catch (error) {
       console.error("Error saving token:", error);
     }
@@ -41,7 +46,15 @@ export class AuthService {
 
   static async getToken(): Promise<string | null> {
     try {
-      return await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
+      const token = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
+      console.log(
+        "🔑 Retrieved token from storage:",
+        token ? "EXISTS" : "NULL"
+      );
+      if (token) {
+        console.log("🔑 Token preview:", token.substring(0, 50) + "...");
+      }
+      return token;
     } catch (error) {
       console.error("Error getting token:", error);
       return null;
@@ -71,6 +84,30 @@ export class AuthService {
       );
       console.log("🎫 Token:", token ? "exists" : "null");
 
+      if (!user || !token) {
+        console.log("❌ Missing user or token");
+        return false;
+      }
+
+      // Check if token is expired
+      try {
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        const currentTime = Math.floor(Date.now() / 1000);
+        const isExpired = payload.exp < currentTime;
+
+        if (isExpired) {
+          console.log("⏰ Token is expired, clearing auth data...");
+          await this.logout();
+          return false;
+        }
+
+        console.log("✅ Token is still valid");
+      } catch {
+        console.log("❌ Invalid token format, clearing auth data...");
+        await this.logout();
+        return false;
+      }
+
       const isLoggedIn = !!(user && token);
       console.log("✅ IsLoggedIn result:", isLoggedIn);
 
@@ -93,11 +130,11 @@ export class ApiService {
         return "http://localhost:3000";
       } else {
         // Mobile (iOS/Android) dengan Expo - menggunakan ngrok
-        return "https://0c50c26226de.ngrok-free.app";
+        return "https://1ea4168934f3.ngrok-free.app";
       }
     } else {
       // Production - URL production yang sama
-      return "https://0c50c26226de.ngrok-free.app";
+      return "https://1ea4168934f3.ngrok-free.app";
     }
   }
   static readonly BASE_URL = ApiService.getBaseUrl();
