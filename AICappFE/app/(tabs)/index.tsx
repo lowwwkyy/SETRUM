@@ -1,7 +1,8 @@
-import { DATA_1M, DATA_1W, DATA_3M } from "@/components/Utils/data";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { AuthenticatedWrapper } from "@/components/AuthenticatedWrapper";
 import { useBudgetValidation } from "@/hooks/useBudgetValidation";
+import { ElectricityUsageService } from "@/services/ElectricityUsageService";
+import { DeviceService } from "@/services/DeviceService";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORMODES } from "@gluestack-style/react/lib/typescript/types";
 import { Box } from "@gluestack-ui/themed";
@@ -19,6 +20,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   FlatList,
   ScrollView,
@@ -26,6 +28,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
 import { useDerivedValue, type SharedValue } from "react-native-reanimated";
@@ -46,6 +49,81 @@ export default function AppPage() {
   const font = useFont(inter, 12);
   const chartFont = useFont(interBold, 30);
 
+  const getDeviceIcon = (deviceType: string) => {
+    const iconMap: { [key: string]: string } = {
+      refrigerator: "snow-outline",
+      washing_machine: "water-outline",
+      dishwasher: "restaurant-outline",
+      microwave: "radio-outline",
+      oven: "flame-outline",
+      stove: "flame-outline",
+      air_conditioner: "thermometer-outline",
+      heater: "thermometer-outline",
+      television: "tv-outline",
+      computer: "desktop-outline",
+      laptop: "laptop-outline",
+      phone_charger: "battery-charging-outline",
+      lighting: "bulb-outline",
+      fan: "leaf-outline",
+      vacuum_cleaner: "brush-outline",
+      blender: "nutrition-outline",
+      toaster: "cafe-outline",
+      coffee_maker: "cafe-outline",
+      other: "help-outline",
+    };
+    return iconMap[deviceType] || "help-outline";
+  };
+
+  const getDeviceDisplayName = (deviceType: string) => {
+    const nameMap: { [key: string]: string } = {
+      refrigerator: "Refrigerator",
+      washing_machine: "Washing Machine",
+      dishwasher: "Dishwasher",
+      microwave: "Microwave",
+      oven: "Oven",
+      stove: "Stove",
+      air_conditioner: "Air Conditioner",
+      heater: "Heater",
+      television: "TV",
+      computer: "Computer",
+      laptop: "Laptop",
+      phone_charger: "Phone Charger",
+      lighting: "Lighting",
+      fan: "Fan",
+      vacuum_cleaner: "Vacuum Cleaner",
+      blender: "Blender",
+      toaster: "Toaster",
+      coffee_maker: "Coffee Maker",
+      other: "Other",
+    };
+    return nameMap[deviceType] || deviceType;
+  };
+
+  const getDeviceWattage = (deviceType: string) => {
+    const wattageMap: { [key: string]: number } = {
+      refrigerator: 150,
+      washing_machine: 2000,
+      dishwasher: 1800,
+      microwave: 1200,
+      oven: 2500,
+      stove: 3000,
+      air_conditioner: 1500,
+      heater: 1200,
+      television: 150,
+      computer: 300,
+      laptop: 65,
+      phone_charger: 10,
+      lighting: 60,
+      fan: 75,
+      vacuum_cleaner: 1000,
+      blender: 400,
+      toaster: 800,
+      coffee_maker: 1000,
+      other: 100,
+    };
+    return wattageMap[deviceType] || 100;
+  };
+
   const { hasBudget, isLoading: budgetLoading } = useBudgetValidation();
 
   const EMPTY_DATA = useMemo(
@@ -59,18 +137,49 @@ export default function AppPage() {
     []
   );
 
-  const getChartDataBasedOnBudget = useCallback(
-    (timeFrame: "1W" | "1M" | "3M") => {
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [chartData, setChartData] = useState(EMPTY_DATA);
+  const [selectedTimeFrame, setSelectedTimeFrame] = useState<
+    "1W" | "1M" | "3M"
+  >("1M");
+  const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
+  const [currentSliderPage, setCurrentSliderPage] = useState(0);
+  const [baseDevicesData, setBaseDevicesData] = useState<any[]>([]);
+  const [realtimeKwh, setRealtimeKwh] = useState<{
+    [deviceId: string]: number;
+  }>({});
+  const [cumulativeKwh, setCumulativeKwh] = useState<{
+    [deviceId: string]: number;
+  }>({});
+
+  const devicesData = useMemo(() => {
+    return baseDevicesData.map((device) => ({
+      ...device,
+      consumption: device.isOn
+        ? `${(cumulativeKwh[device.deviceId] || 0).toFixed(3)} kWh`
+        : "0.000 kWh",
+      currentKwh: cumulativeKwh[device.deviceId] || 0,
+    }));
+  }, [baseDevicesData, cumulativeKwh]);
+
+  const getChartDataFromBackend = useCallback(
+    async (timeFrame: "1W" | "1M" | "3M") => {
       if (!hasBudget && !budgetLoading) {
         return EMPTY_DATA;
       }
 
-      const timeFrameData = {
-        "1W": DATA_1W,
-        "1M": DATA_1M,
-        "3M": DATA_3M,
-      };
-      return timeFrameData[timeFrame];
+      try {
+        setIsLoadingData(true);
+        const data = await ElectricityUsageService.getChartDataByTimeFrame(
+          timeFrame
+        );
+        return data;
+      } catch (error) {
+        console.error("Error fetching chart data:", error);
+        return EMPTY_DATA;
+      } finally {
+        setIsLoadingData(false);
+      }
     },
     [hasBudget, budgetLoading, EMPTY_DATA]
   );
@@ -80,19 +189,103 @@ export default function AppPage() {
     y: { highTmp: 0 },
   });
   const colorMode = useColorScheme() as COLORMODES;
-  const [chartData, setChartData] = useState(EMPTY_DATA);
-  const [selectedTimeFrame, setSelectedTimeFrame] = useState<
-    "1W" | "1M" | "3M"
-  >("1M");
-  const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
-  const [currentSliderPage, setCurrentSliderPage] = useState(0);
   const chartRef = useRef<CartesianActionsHandle<typeof state>>(null);
   const sliderRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    const newData = getChartDataBasedOnBudget(selectedTimeFrame);
-    setChartData(newData);
-  }, [hasBudget, budgetLoading, selectedTimeFrame, getChartDataBasedOnBudget]);
+    const loadChartData = async () => {
+      const newData = await getChartDataFromBackend(selectedTimeFrame);
+      setChartData(newData);
+      setCumulativeKwh({});
+    };
+
+    loadChartData();
+  }, [hasBudget, budgetLoading, selectedTimeFrame, getChartDataFromBackend]);
+
+  const loadDevicesData = useCallback(async () => {
+    if (!hasBudget && !budgetLoading) {
+      setBaseDevicesData([
+        {
+          name: "No Data Available",
+          consumption: "Set up budget first",
+          icon: "information-circle",
+          deviceId: "",
+        },
+      ]);
+      return;
+    }
+
+    try {
+      setIsLoadingData(true);
+      console.log("🔄 Loading devices from backend...");
+
+      const devices = await DeviceService.getUserDevices();
+      console.log("📱 Loaded devices:", devices.length);
+
+      if (devices.length > 0) {
+        const transformedDevices = devices.map((device) => {
+          const deviceName = getDeviceDisplayName(device.type);
+          const wattage = getDeviceWattage(device.type);
+
+          return {
+            name: deviceName,
+            icon: getDeviceIcon(device.type),
+            deviceId: device._id,
+            status: device.isOn ? "on" : "off",
+            type: device.type,
+            isOn: device.isOn,
+            wattage: wattage,
+          };
+        });
+
+        setBaseDevicesData(transformedDevices);
+      } else {
+        setBaseDevicesData([
+          {
+            name: "No Devices Found",
+            consumption: "Add devices to track usage",
+            icon: "add-circle",
+            deviceId: "",
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error loading devices data:", error);
+      setBaseDevicesData([
+        {
+          name: "Error Loading Data",
+          consumption: "Please try again",
+          icon: "alert-circle",
+          deviceId: "",
+        },
+      ]);
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [hasBudget, budgetLoading]);
+
+  useEffect(() => {
+    loadDevicesData();
+  }, [loadDevicesData, selectedTimeFrame]);
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log("🔄 Home screen focused, reloading devices...");
+      loadDevicesData();
+    }, [loadDevicesData])
+  );
+
+  const handleDevicePress = (device: any) => {
+    console.log(
+      "🎯 Device pressed:",
+      device.name,
+      "Device ID:",
+      device.deviceId
+    );
+    console.log("🎯 Navigating to device detail...");
+    const deviceIdToUse = device.deviceId || device._id;
+    router.push(`/device-detail?deviceId=${deviceIdToUse}`);
+  };
 
   useEffect(() => {
     if (chartData.length > 0) {
@@ -104,6 +297,163 @@ export default function AppPage() {
       state.isActive.value = false;
     }
   }, [chartData, state.x.value, state.y.highTmp.value, state.isActive]);
+
+  useEffect(() => {
+    let intervalCounter = 0;
+
+    const interval = setInterval(() => {
+      let totalNewConsumption = 0;
+      intervalCounter++;
+
+      setRealtimeKwh((prev) => {
+        const updated = { ...prev };
+        devicesData.forEach((device) => {
+          if (device.isOn) {
+            const wattage = getDeviceWattage(device.type);
+            const kWhPerSecond = wattage / 3600000;
+            updated[device.deviceId] =
+              (updated[device.deviceId] || 0) + kWhPerSecond;
+
+            if (!selectedDevice || selectedDevice === device.deviceId) {
+              totalNewConsumption += kWhPerSecond;
+            }
+          }
+        });
+        return updated;
+      });
+
+      setCumulativeKwh((prev) => {
+        const updated = { ...prev };
+        devicesData.forEach((device) => {
+          if (device.isOn) {
+            const wattage = getDeviceWattage(device.type);
+            const kWhPerSecond = wattage / 3600000;
+            updated[device.deviceId] =
+              (updated[device.deviceId] || 0) + kWhPerSecond;
+          }
+        });
+
+        if (totalNewConsumption > 0) {
+          const newTotalConsumption = Object.values(updated).reduce(
+            (sum: number, val: number) => sum + val,
+            0
+          );
+
+          console.log(
+            "📊 Chart real-time update - Total consumption:",
+            newTotalConsumption.toFixed(6),
+            "kWh"
+          );
+
+          setChartData((currentChartData) => {
+            if (currentChartData.length === 0) return currentChartData;
+
+            const updatedChartData = [...currentChartData];
+
+            if (intervalCounter % 10 === 0) {
+              const newDataPoint = {
+                day: updatedChartData.length + 1,
+                highTmp: newTotalConsumption,
+              };
+
+              if (updatedChartData.length >= 20) {
+                updatedChartData.shift();
+                updatedChartData.forEach((point, index) => {
+                  point.day = index + 1;
+                });
+              }
+
+              updatedChartData.push(newDataPoint);
+              console.log(
+                "📈 Added new chart point:",
+                newDataPoint.day,
+                "kWh:",
+                newDataPoint.highTmp.toFixed(6)
+              );
+            } else {
+              const lastDataPoint =
+                updatedChartData[updatedChartData.length - 1];
+              updatedChartData[updatedChartData.length - 1] = {
+                ...lastDataPoint,
+                highTmp: newTotalConsumption,
+              };
+            }
+
+            setTimeout(() => {
+              if (
+                state &&
+                state.y &&
+                state.y.highTmp &&
+                updatedChartData.length > 0
+              ) {
+                const latestValue =
+                  updatedChartData[updatedChartData.length - 1].highTmp;
+                const latestIndex = updatedChartData.length - 1;
+                state.x.value.value = latestIndex;
+                state.y.highTmp.value.value = latestValue;
+              }
+            }, 0);
+
+            return updatedChartData;
+          });
+        }
+
+        return updated;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [devicesData, state, selectedDevice]);
+
+  useEffect(() => {
+    const saveInterval = setInterval(async () => {
+      const currentDate = new Date().toISOString().split("T")[0];
+      const devicesSaved: string[] = [];
+
+      for (const [deviceId, kwhValue] of Object.entries(realtimeKwh)) {
+        if (kwhValue > 0) {
+          try {
+            console.log(
+              "💾 Auto-saving usage data for device:",
+              deviceId,
+              "kWh:",
+              kwhValue.toFixed(6)
+            );
+
+            await ElectricityUsageService.createUsageRecord({
+              deviceId: deviceId,
+              date: currentDate,
+              dailyKwh: kwhValue,
+              hourlyBreakdown: [],
+              avgTemp: 25,
+              peakHours: [],
+            });
+
+            console.log("✅ Auto-save successful for device:", deviceId);
+            devicesSaved.push(deviceId);
+          } catch (error) {
+            console.error("❌ Auto-save error for device:", deviceId, error);
+          }
+        }
+      }
+
+      if (devicesSaved.length > 0) {
+        setRealtimeKwh((prev) => {
+          const updated = { ...prev };
+          devicesSaved.forEach((deviceId) => {
+            updated[deviceId] = 0;
+          });
+          return updated;
+        });
+
+        console.log(
+          "🔄 Auto-reset tracking counters (display remains cumulative) for:",
+          devicesSaved
+        );
+      }
+    }, 1 * 60 * 1000);
+    return () => clearInterval(saveInterval);
+  }, [realtimeKwh]);
 
   const tapGesture = Gesture.Tap().onStart((e) => {
     state.isActive.value = true;
@@ -125,14 +475,23 @@ export default function AppPage() {
     return state.y.highTmp.value.value.toFixed(2) + " kWh";
   }, [state, chartData, hasBudget, budgetLoading]);
 
-  const handleTimeFrameChange = (timeFrame: "1W" | "1M" | "3M") => {
+  const handleTimeFrameChange = async (timeFrame: "1W" | "1M" | "3M") => {
     setSelectedTimeFrame(timeFrame);
-    const newData = getChartDataBasedOnBudget(timeFrame);
-    setChartData(newData);
+    setSelectedDevice(null);
 
-    if (newData.length > 0) {
-      const latestValue = newData[newData.length - 1].highTmp;
-      const latestIndex = newData.length - 1;
+    setCumulativeKwh({});
+
+    const baseData = await getChartDataFromBackend(timeFrame);
+
+    const progressiveChartData =
+      baseData.length > 0 ? baseData : [{ day: 1, highTmp: 0 }];
+
+    setChartData(progressiveChartData);
+
+    if (progressiveChartData.length > 0) {
+      const latestValue =
+        progressiveChartData[progressiveChartData.length - 1].highTmp;
+      const latestIndex = progressiveChartData.length - 1;
 
       setTimeout(() => {
         state.x.value.value = latestIndex;
@@ -144,190 +503,6 @@ export default function AppPage() {
 
   const labelColor = colorMode === "dark" ? "black" : "white";
   const lineColor = colorMode === "dark" ? "gray" : "white";
-
-  const generateDeviceData = useCallback(
-    (deviceName: string, timeFrame: "1W" | "1M" | "3M") => {
-      // Return empty data if budget not set
-      if (!hasBudget && !budgetLoading) {
-        return EMPTY_DATA;
-      }
-
-      const baseData = {
-        "1W": DATA_1W,
-        "1M": DATA_1M,
-        "3M": DATA_3M,
-      }[timeFrame];
-
-      const deviceMultipliers: { [key: string]: number } = {
-        "Air Conditioner": 0.33,
-        Heater: 0.24,
-        Refrigerator: 0.24,
-        Lighting: 0.14,
-        "Washing Machine": 0.18,
-        TV: 0.12,
-        Microwave: 0.08,
-        Computer: 0.15,
-      };
-
-      const multiplier = deviceMultipliers[deviceName] || 0.25;
-
-      return baseData.map((item, index) => ({
-        ...item,
-        highTmp: Math.round(item.highTmp * multiplier * 100) / 100,
-      }));
-    },
-    [hasBudget, budgetLoading, EMPTY_DATA]
-  );
-
-  useEffect(() => {
-    const getCurrentChartData = () => {
-      if (!hasBudget && !budgetLoading) {
-        return EMPTY_DATA;
-      }
-
-      if (selectedDevice) {
-        return generateDeviceData(selectedDevice, selectedTimeFrame);
-      }
-      return getChartDataBasedOnBudget(selectedTimeFrame);
-    };
-
-    const newData = getCurrentChartData();
-    setChartData(newData);
-  }, [
-    selectedDevice,
-    selectedTimeFrame,
-    generateDeviceData,
-    hasBudget,
-    budgetLoading,
-    EMPTY_DATA,
-    getChartDataBasedOnBudget,
-  ]);
-
-  const handleDevicePress = (deviceName: string) => {
-    if (selectedDevice === deviceName) {
-      setSelectedDevice(null);
-    } else {
-      setSelectedDevice(deviceName);
-    }
-  };
-
-  const devicesData = useMemo(() => {
-    const getDevicesData = (timeFrame: "1W" | "1M" | "3M") => {
-      if (!hasBudget && !budgetLoading) {
-        return [
-          {
-            name: "Air Conditioner",
-            consumption: "No Data Available",
-            icon: "snow" as const,
-          },
-          {
-            name: "Heater",
-            consumption: "No Data Available",
-            icon: "flame" as const,
-          },
-          {
-            name: "Refrigerator",
-            consumption: "No Data Available",
-            icon: "thermometer" as const,
-          },
-          {
-            name: "Lighting",
-            consumption: "No Data Available",
-            icon: "bulb" as const,
-          },
-          {
-            name: "Washing Machine",
-            consumption: "No Data Available",
-            icon: "water" as const,
-          },
-          { name: "TV", consumption: "No Data Available", icon: "tv" as const },
-          {
-            name: "Microwave",
-            consumption: "No Data Available",
-            icon: "restaurant" as const,
-          },
-          {
-            name: "Computer",
-            consumption: "No Data Available",
-            icon: "desktop" as const,
-          },
-        ];
-      }
-
-      const getDeviceTotalConsumption = (deviceName: string) => {
-        const deviceData = generateDeviceData(deviceName, timeFrame);
-
-        const totalConsumption = deviceData.reduce(
-          (sum, item) => sum + item.highTmp,
-          0
-        );
-
-        return totalConsumption;
-      };
-
-      return [
-        {
-          name: "Air Conditioner",
-          consumption: `${
-            Math.round(getDeviceTotalConsumption("Air Conditioner") * 100) / 100
-          } kWh`,
-          icon: "snow" as const,
-        },
-        {
-          name: "Heater",
-          consumption: `${
-            Math.round(getDeviceTotalConsumption("Heater") * 100) / 100
-          } kWh`,
-          icon: "flame" as const,
-        },
-        {
-          name: "Refrigerator",
-          consumption: `${
-            Math.round(getDeviceTotalConsumption("Refrigerator") * 100) / 100
-          } kWh`,
-          icon: "thermometer" as const,
-        },
-        {
-          name: "Lighting",
-          consumption: `${
-            Math.round(getDeviceTotalConsumption("Lighting") * 100) / 100
-          } kWh`,
-          icon: "bulb" as const,
-        },
-        {
-          name: "Washing Machine",
-          consumption: `${
-            Math.round(getDeviceTotalConsumption("Washing Machine") * 100) / 100
-          } kWh`,
-          icon: "water" as const,
-        },
-        {
-          name: "TV",
-          consumption: `${
-            Math.round(getDeviceTotalConsumption("TV") * 100) / 100
-          } kWh`,
-          icon: "tv" as const,
-        },
-        {
-          name: "Microwave",
-          consumption: `${
-            Math.round(getDeviceTotalConsumption("Microwave") * 100) / 100
-          } kWh`,
-          icon: "restaurant" as const,
-        },
-        {
-          name: "Computer",
-          consumption: `${
-            Math.round(getDeviceTotalConsumption("Computer") * 100) / 100
-          } kWh`,
-          icon: "desktop" as const,
-        },
-      ];
-    };
-
-    return getDevicesData(selectedTimeFrame);
-  }, [selectedTimeFrame, hasBudget, budgetLoading, generateDeviceData]);
-
   const chunkArray = <T,>(array: T[], size: number): T[][] => {
     const result: T[][] = [];
     for (let i = 0; i < array.length; i += size) {
@@ -345,9 +520,36 @@ export default function AppPage() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerTitle}>SETRUM</Text>
+          </View>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => router.push("/(tabs)/alert")}
+            >
+              <Ionicons
+                name="notifications-outline"
+                size={24}
+                color={labelColor}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => router.push("/(tabs)/settings")}
+            >
+              <Ionicons name="settings-outline" size={24} color={labelColor} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <Text style={styles.title}>
           {selectedDevice
-            ? `${selectedDevice} - Energy Usage`
+            ? `Device Usage - ${
+                devicesData.find((d) => d.deviceId === selectedDevice)?.name ||
+                "Device"
+              }`
             : "Energy Dashboard"}
         </Text>
 
@@ -366,6 +568,37 @@ export default function AppPage() {
             </TouchableOpacity>
           </View>
         )}
+
+        {isLoadingData && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.loadingText}>Loading data...</Text>
+          </View>
+        )}
+
+        {hasBudget &&
+          !isLoadingData &&
+          devicesData.length > 0 &&
+          (devicesData[0]?.name === "No Devices Found" ||
+            devicesData[0]?.name === "Error Loading Data") && (
+            <View style={styles.noDevicesMessage}>
+              <Text style={styles.noDevicesText}>
+                {devicesData[0]?.name === "No Devices Found"
+                  ? "🔌 No devices found. Add devices to start tracking energy usage."
+                  : "❌ Error loading device data. Please check your connection and try again."}
+              </Text>
+              {devicesData[0]?.name === "No Devices Found" && (
+                <TouchableOpacity
+                  style={styles.addDeviceButton}
+                  onPress={() => {
+                    console.log("Navigate to add device page");
+                  }}
+                >
+                  <Text style={styles.addDeviceButtonText}>Add Device</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
         <Box
           width="100%"
@@ -472,9 +705,20 @@ export default function AppPage() {
             </View>
 
             <View style={styles.devicesSection}>
-              <Text style={styles.sectionTitle}>
-                {selectedDevice ? `${selectedDevice} Usage` : "Devices"}
-              </Text>
+              <View style={styles.devicesSectionHeader}>
+                <Text style={styles.sectionTitle}>
+                  {selectedDevice ? `${selectedDevice} Usage` : "Devices"}
+                </Text>
+                {!selectedDevice && (
+                  <TouchableOpacity
+                    style={styles.addDeviceButton}
+                    onPress={() => router.push("/add-device")}
+                  >
+                    <Ionicons name="add" size={20} color="#4285F4" />
+                    <Text style={styles.addDeviceText}>Add Device</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
 
               <FlatList
                 ref={sliderRef}
@@ -502,11 +746,12 @@ export default function AppPage() {
                   <View style={styles.devicesGrid}>
                     {pageDevices.map((device: any, index: number) => (
                       <TouchableOpacity
-                        key={device.name}
-                        onPress={() => handleDevicePress(device.name)}
+                        key={device.deviceId || device.name}
+                        onPress={() => handleDevicePress(device)}
                         style={[
                           styles.deviceCard,
-                          selectedDevice === device.name &&
+                          device.isOn && styles.activeDeviceCard, // Green background for active devices
+                          selectedDevice === device.deviceId &&
                             styles.selectedDeviceCard,
                         ]}
                       >
@@ -515,7 +760,9 @@ export default function AppPage() {
                             name={device.icon}
                             size={24}
                             color={
-                              selectedDevice === device.name
+                              device.isOn
+                                ? "#ffffff" // White icon for active devices
+                                : selectedDevice === device.deviceId
                                 ? "#4285F4"
                                 : "black"
                             }
@@ -524,7 +771,8 @@ export default function AppPage() {
                         <Text
                           style={[
                             styles.deviceName,
-                            selectedDevice === device.name &&
+                            device.isOn && styles.activeDeviceText, // White text for active devices
+                            selectedDevice === device.deviceId &&
                               styles.selectedDeviceName,
                           ]}
                         >
@@ -533,7 +781,8 @@ export default function AppPage() {
                         <Text
                           style={[
                             styles.deviceConsumption,
-                            selectedDevice === device.name &&
+                            device.isOn && styles.activeDeviceText, // White text for active devices
+                            selectedDevice === device.deviceId &&
                               styles.selectedDeviceConsumption,
                           ]}
                         >
@@ -582,6 +831,29 @@ const styles = StyleSheet.create({
     backgroundColor: "#f8fafc",
     paddingTop: 40,
     paddingHorizontal: 10,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 6,
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "black",
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  headerButton: {
+    padding: 8,
+    marginLeft: 8,
   },
   scrollContent: {
     flexGrow: 1,
@@ -698,6 +970,14 @@ const styles = StyleSheet.create({
     borderColor: "#4285F4",
     borderWidth: 2,
   },
+  activeDeviceCard: {
+    backgroundColor: "#4CAF50", // Green background for active devices
+    borderColor: "#388E3C",
+    borderWidth: 2,
+  },
+  activeDeviceText: {
+    color: "#FFFFFF", // White text for active devices
+  },
   selectedDeviceName: {
     color: "#4285F4",
   },
@@ -751,5 +1031,127 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 14,
     fontWeight: "600",
+  },
+  loadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "rgba(248, 250, 252, 0.8)",
+    borderRadius: 8,
+    marginHorizontal: 10,
+    marginVertical: 10,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+  },
+  noDevicesMessage: {
+    backgroundColor: "#f8f9fa",
+    borderColor: "#dee2e6",
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 16,
+    marginVertical: 16,
+    marginHorizontal: 10,
+    alignItems: "center",
+  },
+  noDevicesText: {
+    fontSize: 16,
+    color: "#495057",
+    textAlign: "center",
+    marginBottom: 12,
+    fontWeight: "500",
+  },
+  addDeviceButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "transparent",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#4285F4",
+  },
+  addDeviceText: {
+    color: "#4285F4",
+    fontSize: 12,
+    fontWeight: "600",
+    marginLeft: 4,
+  },
+  devicesSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  addDeviceButtonText: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  saveSection: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 10,
+    marginVertical: 10,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  saveSectionTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 8,
+  },
+  saveInfo: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 12,
+  },
+  manualSaveButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#4285F4",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    justifyContent: "center",
+    flex: 1,
+  },
+  manualSaveText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 8,
+  },
+  buttonRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  resetDisplayButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ff6b6b",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    justifyContent: "center",
+    flex: 1,
+  },
+  resetDisplayText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 8,
   },
 });

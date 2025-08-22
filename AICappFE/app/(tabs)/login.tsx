@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../hooks/useAuth";
-import { AuthService, ApiService, User } from "../../services/AuthService";
+import { AuthService, ApiService } from "../../services/AuthService";
 WebBrowser.maybeCompleteAuthSession();
 
 const discovery = {
