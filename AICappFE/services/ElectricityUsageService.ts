@@ -2,20 +2,15 @@ import { AuthService } from "./AuthService";
 import { Platform } from "react-native";
 import { ElectricityUsage, Device, DeviceService } from "./DeviceService";
 
-// Fungsi untuk mendapatkan API Base URL yang tepat untuk Expo
 const getApiBaseUrl = (): string => {
   if (__DEV__) {
-    // Untuk development dengan Expo
     if (Platform.OS === "web") {
-      // Web (Expo Web) - bisa gunakan localhost
       return "http://localhost:3000/api";
     } else {
-      // Mobile (iOS/Android) dengan Expo - menggunakan ngrok
-      return "https://1ea4168934f3.ngrok-free.app/api";
+      return "https://1bde337fa39d.ngrok-free.app/api";
     }
   } else {
-    // Production - URL production yang sama
-    return "https://1ea4168934f3.ngrok-free.app/api";
+    return "https://1bde337fa39d.ngrok-free.app/api";
   }
 };
 
@@ -95,7 +90,6 @@ export class ElectricityUsageService {
         }
         console.log("⚡ ElectricityUsageService - Error response:", errorData);
 
-        // Check for token invalid error
         if (
           response.status === 401 &&
           errorData.message === "Token is not valid"
@@ -114,7 +108,6 @@ export class ElectricityUsageService {
     }
   }
 
-  // Get usage data with optional filters
   static async getFilteredUsage(
     deviceId?: string,
     startDate?: Date,
@@ -133,7 +126,6 @@ export class ElectricityUsageService {
         throw new Error("No auth token found");
       }
 
-      // Build query parameters
       const params = new URLSearchParams();
       if (deviceId) params.append("deviceId", deviceId);
       if (startDate) params.append("startDate", startDate.toISOString());
@@ -177,7 +169,6 @@ export class ElectricityUsageService {
           errorData
         );
 
-        // Check for token invalid error
         if (
           response.status === 401 &&
           errorData.message === "Token is not valid"
@@ -320,18 +311,15 @@ export class ElectricityUsageService {
     }
   }
 
-  // Get chart data based on timeframe (1W, 1M, 3M)
   static async getChartDataByTimeFrame(
     timeFrame: "1W" | "1M" | "3M"
   ): Promise<{ day: number; highTmp: number }[]> {
     try {
       console.log("⚡ Getting chart data for timeframe:", timeFrame);
 
-      // First check if user has any devices
       const devices = await DeviceService.getUserDevices();
       console.log("⚡ Found devices for chart:", devices.length);
 
-      // If no devices, return empty data immediately
       if (devices.length === 0) {
         console.log("⚡ No devices found, returning empty chart data");
         const daysCount = timeFrame === "1W" ? 7 : timeFrame === "1M" ? 30 : 90;
@@ -345,7 +333,6 @@ export class ElectricityUsageService {
       const endDate = new Date();
       let startDate = new Date();
 
-      // Calculate start date based on timeframe
       switch (timeFrame) {
         case "1W":
           startDate.setDate(endDate.getDate() - 7);
@@ -371,7 +358,6 @@ export class ElectricityUsageService {
 
       console.log("⚡ Usage data retrieved:", usageData.length, "records");
 
-      // Group usage data by date and sum daily kWh
       const dailyUsage = new Map<string, number>();
 
       usageData.forEach((usage) => {
@@ -380,16 +366,13 @@ export class ElectricityUsageService {
         dailyUsage.set(date, currentTotal + usage.dailyKwh);
       });
 
-      // Convert to chart format with proper day indexing based on timeframe
       const daysCount = timeFrame === "1W" ? 7 : timeFrame === "1M" ? 30 : 90;
       const chartData: { day: number; highTmp: number }[] = [];
 
-      // Initialize array with correct number of days
       for (let i = 1; i <= daysCount; i++) {
         chartData.push({ day: i, highTmp: 0 });
       }
 
-      // Fill in actual data where available
       const sortedDates = Array.from(dailyUsage.keys()).sort();
 
       sortedDates.forEach((date, index) => {
@@ -402,14 +385,12 @@ export class ElectricityUsageService {
         }
       });
 
-      // If no usage data found, return sample realistic data based on timeframe
       if (dailyUsage.size === 0) {
         console.log("⚡ No usage data found, generating sample data for chart");
 
-        // Generate realistic sample data based on average device usage
         for (let i = 0; i < daysCount; i++) {
-          const baseConsumption = 1.5; // Base 1.5 kWh per day
-          const variation = Math.random() * 1.0; // Random variation up to 1 kWh
+          const baseConsumption = 1.5;
+          const variation = Math.random() * 1.0;
           const dailyKwh = baseConsumption + variation;
 
           chartData[i] = {
@@ -428,7 +409,6 @@ export class ElectricityUsageService {
       return chartData;
     } catch (error) {
       console.error("Error getting chart data:", error);
-      // Return sample data on error instead of empty data
       const daysCount = timeFrame === "1W" ? 7 : timeFrame === "1M" ? 30 : 90;
       const sampleData: { day: number; highTmp: number }[] = [];
 
@@ -445,7 +425,6 @@ export class ElectricityUsageService {
     }
   }
 
-  // Get device usage data with chart format
   static async getDeviceChartData(
     deviceId: string,
     timeFrame: "1W" | "1M" | "3M"
@@ -454,7 +433,6 @@ export class ElectricityUsageService {
       const endDate = new Date();
       let startDate = new Date();
 
-      // Calculate start date based on timeframe
       switch (timeFrame) {
         case "1W":
           startDate.setDate(endDate.getDate() - 7);
@@ -475,7 +453,6 @@ export class ElectricityUsageService {
         endDate
       );
 
-      // Group usage data by date
       const dailyUsage = new Map<string, number>();
 
       usageData.forEach((usage) => {
@@ -484,7 +461,6 @@ export class ElectricityUsageService {
         dailyUsage.set(date, currentTotal + usage.dailyKwh);
       });
 
-      // Convert to chart format
       const chartData: { day: number; highTmp: number }[] = [];
       const sortedDates = Array.from(dailyUsage.keys()).sort();
 
@@ -495,7 +471,6 @@ export class ElectricityUsageService {
         });
       });
 
-      // If no data, return empty data based on timeframe
       if (chartData.length === 0) {
         const daysCount = timeFrame === "1W" ? 7 : timeFrame === "1M" ? 30 : 90;
         for (let i = 1; i <= daysCount; i++) {
@@ -506,7 +481,6 @@ export class ElectricityUsageService {
       return chartData;
     } catch (error) {
       console.error("Error getting device chart data:", error);
-      // Return empty data on error
       const daysCount = timeFrame === "1W" ? 7 : timeFrame === "1M" ? 30 : 90;
       const emptyData: { day: number; highTmp: number }[] = [];
       for (let i = 1; i <= daysCount; i++) {
@@ -516,7 +490,6 @@ export class ElectricityUsageService {
     }
   }
 
-  // Get devices with usage summary for home page
   static async getDevicesWithUsageSummary(
     timeFrame: "1W" | "1M" | "3M"
   ): Promise<
@@ -525,7 +498,6 @@ export class ElectricityUsageService {
     try {
       console.log("⚡ Getting devices with usage for timeframe:", timeFrame);
 
-      // Get all user devices
       const devices = await DeviceService.getUserDevices();
       console.log("⚡ Found devices:", devices.length);
 
@@ -536,7 +508,6 @@ export class ElectricityUsageService {
       const endDate = new Date();
       let startDate = new Date();
 
-      // Calculate start date based on timeframe
       switch (timeFrame) {
         case "1W":
           startDate.setDate(endDate.getDate() - 7);
@@ -549,7 +520,6 @@ export class ElectricityUsageService {
           break;
       }
 
-      // Get usage data for each device
       const devicesWithUsage = await Promise.all(
         devices.map(async (device) => {
           try {
@@ -559,13 +529,11 @@ export class ElectricityUsageService {
               endDate
             );
 
-            // Calculate total consumption for the timeframe
             const totalConsumption = usageData.reduce(
               (sum, usage) => sum + usage.dailyKwh,
               0
             );
 
-            // Map device types to icons
             const iconMap: { [key: string]: string } = {
               "Air Conditioner": "snow",
               Heater: "flame",
@@ -731,7 +699,6 @@ export class ElectricityUsageService {
     }
   }
 
-  // Helper method to combine devices with their usage data
   static async getDevicesWithUsageData(): Promise<DeviceUsageData[]> {
     try {
       const [devices, usageData] = await Promise.all([
@@ -741,7 +708,6 @@ export class ElectricityUsageService {
 
       const deviceUsageMap = new Map<string, ElectricityUsage[]>();
 
-      // Group usage data by device ID
       usageData.forEach((usage) => {
         if (!deviceUsageMap.has(usage.deviceId)) {
           deviceUsageMap.set(usage.deviceId, []);
@@ -749,7 +715,6 @@ export class ElectricityUsageService {
         deviceUsageMap.get(usage.deviceId)?.push(usage);
       });
 
-      // Combine devices with their usage data
       const devicesWithUsage: DeviceUsageData[] = devices.map((device) => {
         const usage = deviceUsageMap.get(device._id) || [];
         const totalKwh = usage.reduce((sum, u) => sum + u.dailyKwh, 0);

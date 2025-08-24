@@ -10,11 +10,11 @@ const getApiBaseUrl = (): string => {
       return "http://localhost:3000/api";
     } else {
       // Mobile (iOS/Android) dengan Expo - menggunakan ngrok
-      return "https://1ea4168934f3.ngrok-free.app/api";
+      return "https://1bde337fa39d.ngrok-free.app/api";
     }
   } else {
     // Production - URL production yang sama
-    return "https://1ea4168934f3.ngrok-free.app/api";
+    return "https://1bde337fa39d.ngrok-free.app/api";
   }
 };
 
@@ -22,14 +22,13 @@ const API_BASE_URL = getApiBaseUrl();
 
 export interface Device {
   _id: string;
-  deviceId?: string; // Frontend mapping of _id
+  deviceId?: string;
   userId: string;
-  type: string; // device type from backend enum
-  isOn: boolean; // device status from backend
+  type: string;
+  isOn: boolean;
   createdAt: string;
   updatedAt: string;
 
-  // Frontend computed properties for compatibility
   deviceName?: string;
   deviceType?: string;
   status?: "on" | "off";
@@ -67,9 +66,7 @@ export class DeviceService {
     return await AuthService.getToken();
   }
 
-  // Helper function to transform backend device data to frontend format
   private static transformDevice(backendDevice: any): Device {
-    // Map backend device types to friendly names
     const deviceTypeMap: { [key: string]: string } = {
       refrigerator: "Refrigerator",
       washing_machine: "Washing Machine",
@@ -99,18 +96,16 @@ export class DeviceService {
 
     return {
       ...backendDevice,
-      deviceId: backendDevice._id, // Add deviceId mapping
+      deviceId: backendDevice._id,
       deviceName: deviceName,
       deviceType: deviceName,
       status: backendDevice.isOn ? "on" : "off",
-      // Add some default values for UI compatibility
       wattage: this.getDefaultWattage(backendDevice.type),
       brand: "Generic",
       location: "Home",
     };
   }
 
-  // Helper function to get default wattage based on device type
   private static getDefaultWattage(deviceType: string): number {
     const wattageMap: { [key: string]: number } = {
       refrigerator: 200,
@@ -159,7 +154,6 @@ export class DeviceService {
           const data = JSON.parse(text);
           const devices = data.devices || data;
 
-          // Ensure we return an array and filter out invalid devices
           if (Array.isArray(devices)) {
             return devices
               .filter(
@@ -197,14 +191,12 @@ export class DeviceService {
           );
         }
 
-        // Check for token invalid error
         if (
           response.status === 401 &&
           (errorData.message === "Token is not valid" ||
             errorData.message === "No token, authorization denied")
         ) {
           console.log("🔒 Token invalid, clearing auth data...");
-          // Clear invalid token from storage
           await AuthService.logout();
           throw {
             status: 401,

@@ -89,7 +89,6 @@ export class AuthService {
         return false;
       }
 
-      // Check if token is expired
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
         const currentTime = Math.floor(Date.now() / 1000);
@@ -119,22 +118,16 @@ export class AuthService {
   }
 }
 
-// API Service untuk backend communication
 export class ApiService {
-  // Fungsi untuk mendapatkan BASE_URL yang tepat untuk Expo
   private static getBaseUrl(): string {
     if (__DEV__) {
-      // Untuk development dengan Expo
       if (Platform.OS === "web") {
-        // Web (Expo Web) - bisa gunakan localhost
         return "http://localhost:3000";
       } else {
-        // Mobile (iOS/Android) dengan Expo - menggunakan ngrok
-        return "https://1ea4168934f3.ngrok-free.app";
+        return "https://1bde337fa39d.ngrok-free.app";
       }
     } else {
-      // Production - URL production yang sama
-      return "https://1ea4168934f3.ngrok-free.app";
+      return "https://1bde337fa39d.ngrok-free.app";
     }
   }
   static readonly BASE_URL = ApiService.getBaseUrl();
