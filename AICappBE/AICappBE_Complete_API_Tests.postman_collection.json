@@ -442,6 +442,33 @@
       "name": "Electricity Usage",
       "item": [
         {
+          "name": "Seed Usage Data (DEV)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"days\": 21,\n  \"type\": \"television\",\n  \"base\": 2.2,\n  \"noise\": 0.6\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/usage/seed",
+              "host": ["{{base_url}}"],
+              "path": ["api", "usage", "seed"]
+            }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "pm.test(\"Seed created or already present\", function () {",
+              "  pm.response.to.have.status(201);",
+              "});"
+            ]}}
+          ]
+        },
+        {
           "name": "Create Usage Record",
           "request": {
             "method": "POST",
@@ -1022,6 +1049,106 @@
                 ]
               }
             }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Budget Forecast (SARIMAX)",
+      "item": [
+        {
+          "name": "Budget Forecast",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"budget\": 1500,\n  \"current_date\": \"2025-08-15\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/forecast/budget",
+              "host": ["{{base_url}}"],
+              "path": ["api", "forecast", "budget"]
+            }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "pm.test(\"Budget forecast response OK\", function () {",
+              "  pm.response.to.have.status(200);",
+              "  const res = pm.response.json();",
+              "  pm.expect(res).to.have.property('monthly_usage_forecast');",
+              "  pm.expect(res).to.have.property('budget_limit');",
+              "  pm.expect(res).to.have.property('predicted_total_usage');",
+              "  pm.expect(res).to.have.property('will_exceed_budget');",
+              "  pm.expect(res).to.have.property('days_passed');",
+              "  pm.expect(res).to.have.property('days_remaining');",
+              "  pm.expect(res).to.have.property('consumption_so_far');",
+              "});"
+            ]}}
+          ]
+        },
+        {
+          "name": "Budget Forecast - High Budget",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"budget\": 5000,\n  \"current_date\": \"2025-08-20\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/forecast/budget",
+              "host": ["{{base_url}}"],
+              "path": ["api", "forecast", "budget"]
+            }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "pm.test(\"High budget forecast should not exceed\", function () {",
+              "  pm.response.to.have.status(200);",
+              "  const res = pm.response.json();",
+              "  pm.expect(res).to.have.property('will_exceed_budget');",
+              "  // High budget should likely not be exceeded",
+              "});"
+            ]}}
+          ]
+        },
+        {
+          "name": "Budget Forecast - Low Budget",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"budget\": 100,\n  \"current_date\": \"2025-08-10\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/forecast/budget",
+              "host": ["{{base_url}}"],
+              "path": ["api", "forecast", "budget"]
+            }
+          },
+          "response": [],
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "pm.test(\"Low budget forecast likely to exceed\", function () {",
+              "  pm.response.to.have.status(200);",
+              "  const res = pm.response.json();",
+              "  pm.expect(res).to.have.property('will_exceed_budget');",
+              "  // Low budget will likely be exceeded",
+              "});"
+            ]}}
           ]
         }
       ]

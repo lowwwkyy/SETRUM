@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "start:ai": "cd ai-service && ..\\AIenv\\Scripts\\activate.bat && uvicorn main:app --host 0.0.0.0 --reload",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

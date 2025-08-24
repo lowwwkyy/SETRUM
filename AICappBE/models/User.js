@@ -16,6 +16,11 @@ const UserSchema = new Schema({
   },
   googleId: { // To store the user's unique Google ID
     type: String
+  },
+  householdSize: {
+    type: Number,
+    min: 1,
+    default: null
   }
 });
 
