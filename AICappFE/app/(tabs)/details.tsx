@@ -26,7 +26,6 @@ const inter = require("@/assets/fonts/Roboto-Regular.ttf");
 
 export default function DetailsScreen() {
   const font = useFont(inter, 12);
-
   const [monthlyBudget, setMonthlyBudget] = useState(0);
   const [budgetId, setBudgetId] = useState<string | null>(null);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
@@ -41,7 +40,7 @@ export default function DetailsScreen() {
   const [loadingChart, setLoadingChart] = useState(true);
   const [totalConsumption, setTotalConsumption] = useState(0);
 
-  // Load chart data from real device consumption
+  const monthlyLimit = monthlyBudget > 0 ? monthlyBudget / 1700 : 0;
   const loadChartData = useCallback(async () => {
     try {
       setLoadingChart(true);
@@ -54,17 +53,15 @@ export default function DetailsScreen() {
 
       console.log("📊 Chart data result:", chartDataResult);
 
-      // Convert to format expected by chart
       const formattedData = chartDataResult.map((item, index) => ({
         day: item.day,
-        value: parseFloat(item.highTmp.toFixed(3)), // highTmp contains the consumption value
+        value: parseFloat(item.highTmp.toFixed(3)),
         type: "Consumption",
         date: `Day ${item.day}`,
       }));
 
       setChartData(formattedData);
 
-      // Calculate total consumption based on selected timeframe
       const total = chartDataResult.reduce(
         (sum, item) => sum + item.highTmp,
         0
@@ -81,14 +78,12 @@ export default function DetailsScreen() {
       console.log("📊 Chart data formatted:", formattedData.length, "points");
       console.log("📊 Sample chart data:", formattedData.slice(0, 3));
 
-      // If no real data, try to get data from all devices directly with timeframe filter
       if (total === 0) {
         console.log(
           "📊 No chart data, trying to get device consumption for timeframe:",
           selectedTimeFrame
         );
         try {
-          // Calculate date range based on timeframe
           const endDate = new Date();
           let startDate = new Date();
 
@@ -109,9 +104,8 @@ export default function DetailsScreen() {
             endDate,
           });
 
-          // Get usage data filtered by date range
           const filteredUsage = await ElectricityUsageService.getFilteredUsage(
-            undefined, // all devices
+            undefined,
             startDate,
             endDate
           );
@@ -127,7 +121,6 @@ export default function DetailsScreen() {
           let totalFromDevices = 0;
           let chartDataFromDevices: any[] = [];
 
-          // Calculate total from filtered usage
           filteredUsage.forEach((usage) => {
             totalFromDevices += usage.dailyKwh || 0;
           });
@@ -143,7 +136,6 @@ export default function DetailsScreen() {
           if (totalFromDevices > 0) {
             setTotalConsumption(totalFromDevices);
 
-            // Group usage by date for chart with proper day count
             const daysCount =
               selectedTimeFrame === "1W"
                 ? 7
@@ -158,7 +150,6 @@ export default function DetailsScreen() {
               dailyUsage.set(date, currentTotal + (usage.dailyKwh || 0));
             });
 
-            // Create chart data with fixed number of days
             chartDataFromDevices = [];
             for (let i = 1; i <= daysCount; i++) {
               chartDataFromDevices.push({
@@ -169,7 +160,6 @@ export default function DetailsScreen() {
               });
             }
 
-            // Fill in actual data where available
             const sortedDates = Array.from(dailyUsage.keys()).sort();
             sortedDates.forEach((date, index) => {
               if (index < daysCount) {
@@ -190,7 +180,6 @@ export default function DetailsScreen() {
       }
     } catch (error) {
       console.error("Error loading chart data:", error);
-      // Fallback to empty data
       setChartData([]);
       setTotalConsumption(0);
     } finally {
@@ -203,7 +192,6 @@ export default function DetailsScreen() {
     loadChartData();
   }, [loadChartData]);
 
-  // Refresh data when tab is focused
   useFocusEffect(
     useCallback(() => {
       console.log("📊 Details tab focused, refreshing data");
@@ -243,7 +231,6 @@ export default function DetailsScreen() {
       selectedTimeFrame === "1W" ? 7 : selectedTimeFrame === "1M" ? 30 : 90;
 
     if (loadingChart || chartData.length === 0) {
-      // Create loading data with correct number of days
       const loadingData = [];
       for (let i = 1; i <= daysCount; i++) {
         loadingData.push({
@@ -256,7 +243,6 @@ export default function DetailsScreen() {
       return loadingData;
     }
 
-    // Ensure we have the correct number of data points for the timeframe
     const processedData = [];
     for (let i = 1; i <= daysCount; i++) {
       const existingData = chartData.find((item) => item.day === i);
@@ -294,15 +280,21 @@ export default function DetailsScreen() {
     },
   });
 
-  // Calculate budget stats using real consumption data
-  const spentAmount = totalConsumption * 1700; // Convert kWh to IDR (1700 per kWh)
+  const spentAmount = totalConsumption * 1700;
   const remainingAmount = monthlyBudget - spentAmount;
   const spentPercentage =
     monthlyBudget === 0 ? 0 : (spentAmount / monthlyBudget) * 100;
 
   const dailyAverage =
     budgetForecastData.length > 0 ? spentAmount / budgetForecastData.length : 0;
-  const dailyRecommended = monthlyBudget === 0 ? 0 : monthlyBudget / 30;
+  // Calculate remaining days in the current month
+  const today = new Date();
+  const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const remainingDaysInMonth = lastDayOfMonth.getDate() - today.getDate() + 1;
+  const dailyRecommended =
+    remainingAmount > 0 && remainingDaysInMonth > 0
+      ? remainingAmount / remainingDaysInMonth
+      : 0;
 
   const handleEditBudget = () => {
     console.log("Edit budget button pressed!");
@@ -384,7 +376,6 @@ export default function DetailsScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Budget Overview</Text>
 
-        {/* Time Frame Selector */}
         <View style={styles.timeFrameContainer}>
           <Text style={styles.timeFrameLabel}>Chart Period:</Text>
           <View style={styles.timeFrameButtons}>
@@ -412,7 +403,6 @@ export default function DetailsScreen() {
           </View>
         </View>
 
-        {/* Total Consumption Display */}
         <View style={styles.consumptionCard}>
           <View style={styles.consumptionHeader}>
             <Ionicons name="flash" size={24} color="#F59E0B" />
@@ -509,7 +499,6 @@ export default function DetailsScreen() {
                 </Text>
               </View>
 
-              {/* Chart */}
               <Box style={styles.chartContainer}>
                 <Text style={styles.sectionTitle}>
                   Monthly Energy Budget Forecast
@@ -726,7 +715,7 @@ export default function DetailsScreen() {
                       ]}
                     />
                     <Text style={styles.chartLegendText}>
-                      Budget Limit (1500 kWh)
+                      Budget Limit ({monthlyLimit.toFixed(1)} kWh)
                     </Text>
                   </View>
                   <View style={styles.chartLegendItem}>
@@ -773,7 +762,6 @@ export default function DetailsScreen() {
               </View>
             </View>
 
-            {/* AI Recommendation Section */}
             <View style={styles.aiRecommendationContainer}>
               <View style={styles.aiRecommendationHeader}>
                 <Ionicons name="bulb" size={24} color="#4F46E5" />

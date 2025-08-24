@@ -1,20 +1,15 @@
 import { AuthService } from "./AuthService";
 import { Platform } from "react-native";
 
-// Fungsi untuk mendapatkan API Base URL yang tepat untuk Expo
 const getApiBaseUrl = (): string => {
   if (__DEV__) {
-    // Untuk development dengan Expo
     if (Platform.OS === "web") {
-      // Web (Expo Web) - bisa gunakan localhost
       return "http://localhost:3000/api";
     } else {
-      // Mobile (iOS/Android) dengan Expo - menggunakan ngrok
-      return "https://1ea4168934f3.ngrok-free.app/api";
+      return "https://1bde337fa39d.ngrok-free.app/api";
     }
   } else {
-    // Production - URL production yang sama
-    return "https://1ea4168934f3.ngrok-free.app/api";
+    return "https://1bde337fa39d.ngrok-free.app/api";
   }
 };
 
@@ -45,10 +40,9 @@ export class BudgetService {
         throw new Error("No auth token found");
       }
 
-      // Get current date for year and month
       const currentDate = new Date();
       const year = currentDate.getFullYear();
-      const month = currentDate.getMonth() + 1; // JavaScript months are 0-indexed
+      const month = currentDate.getMonth() + 1;
 
       const response = await fetch(
         `${API_BASE_URL}/budget?year=${year}&month=${month}`,
@@ -65,10 +59,8 @@ export class BudgetService {
         const data = await response.json();
         return data;
       } else if (response.status === 404) {
-        // No budget found
         return null;
       } else {
-        // Handle authentication errors
         if (response.status === 401) {
           console.log("🔒 Budget API: Token invalid, clearing auth data...");
           await AuthService.logout();
@@ -90,10 +82,9 @@ export class BudgetService {
         throw new Error("No auth token found");
       }
 
-      // Get current date for year and month
       const currentDate = new Date();
       const year = currentDate.getFullYear();
-      const month = currentDate.getMonth() + 1; // JavaScript months are 0-indexed
+      const month = currentDate.getMonth() + 1;
 
       console.log("🏦 Creating budget for:", { year, month, amount });
 
@@ -152,7 +143,6 @@ export class BudgetService {
 
       console.log("🏦 Updating budget for:", { year, month, amount });
 
-      // Use POST method as backend uses the same endpoint for create and update
       const response = await fetch(`${API_BASE_URL}/budget`, {
         method: "POST",
         headers: {
