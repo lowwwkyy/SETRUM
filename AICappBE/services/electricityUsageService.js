@@ -71,3 +71,62 @@ exports.getUsageSummary = async (userId) => {
     { $sort: { _id: -1 } }
   ]);
 };
+
+// Seed usage data for testing (DEV only)
+exports.seedUsageData = async (userId, days = 21, deviceType = 'television', baseKwh = 2.2, noiseLevel = 0.6) => {
+  const { Device } = require('../models');
+  
+  try {
+    // First, find or create a device of the specified type
+    let device = await Device.findOne({ userId, type: deviceType });
+    if (!device) {
+      device = new Device({
+        userId,
+        type: deviceType,
+        isOn: true
+      });
+      await device.save();
+    }
+
+    const usageRecords = [];
+    const today = new Date();
+    
+    for (let i = 0; i < days; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      date.setUTCHours(0, 0, 0, 0);
+
+      // Check if usage record already exists for this date and device
+      const existingUsage = await ElectricityUsage.findOne({
+        userId,
+        deviceId: device._id,
+        date
+      });
+
+      if (!existingUsage) {
+        // Generate realistic usage with some randomness
+        const randomFactor = 1 + (Math.random() - 0.5) * noiseLevel;
+        const dailyKwh = Math.max(0.1, baseKwh * randomFactor);
+
+        const usage = new ElectricityUsage({
+          userId,
+          deviceId: device._id,
+          date,
+          dailyKwh: Math.round(dailyKwh * 100) / 100 // Round to 2 decimal places
+        });
+
+        await usage.save();
+        usageRecords.push(usage);
+      }
+    }
+
+    return {
+      message: `Successfully seeded ${usageRecords.length} usage records for ${deviceType}`,
+      device: device._id,
+      recordsCreated: usageRecords.length,
+      totalDays: days
+    };
+  } catch (error) {
+    throw new Error(`Failed to seed usage data: ${error.message}`);
+  }
+};
