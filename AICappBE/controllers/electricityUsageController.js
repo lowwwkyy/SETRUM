@@ -123,3 +123,17 @@ exports.getUsageSummary = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// Seed usage data for testing (DEV only)
+exports.seedUsageData = async (req, res) => {
+  try {
+    const { days = 21, type = 'television', base = 2.2, noise = 0.6 } = req.body;
+    const result = await electricityUsageService.seedUsageData(req.user.id, days, type, base, noise);
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Error seeding usage data:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// (dev-only seeding removed)

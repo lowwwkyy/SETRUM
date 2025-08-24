@@ -30,11 +30,15 @@ mongoose.connect(process.env.MONGO_URI)
 
 // --- Routes ---
 // All requests to '/auth' will be handled by our authRoutes file
+console.log('📍 Mounting routes...');
 app.use('/auth', require('./routes/authRoutes'));
 app.use('/api/user', require('./routes/user'));
 app.use('/api/device', require('./routes/device'));
 app.use('/api/usage', require('./routes/electricityUsage'));
 app.use('/api/budget', require('./routes/budget'));
+console.log('📍 Mounting forecast routes at /api/forecast...');
+app.use('/api/forecast', require('./routes/forecast'));
+console.log('✅ All routes mounted successfully');
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

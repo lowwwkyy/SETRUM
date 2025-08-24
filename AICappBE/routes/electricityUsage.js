@@ -36,6 +36,11 @@ router.get('/device/:deviceId', electricityUsageController.getDeviceUsage);
 // @access  Private
 router.post('/', electricityUsageController.createUsageRecord);
 
+// @route   POST api/usage/seed
+// @desc    Seed usage data for testing (DEV only)
+// @access  Private
+router.post('/seed', electricityUsageController.seedUsageData);
+
 // @route   PUT api/usage/:usageId
 // @desc    Update a usage record
 // @access  Private
